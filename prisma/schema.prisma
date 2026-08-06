@@ -1,0 +1,140 @@
+// Cotizador Personal Shopper — esquema v1
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Dominio
+// ---------------------------------------------------------------------------
+
+/// Singleton de configuración (una sola fila, id fijo "config").
+
+model Settings {
+  id              String   @id @default("config")
+  margen_pct      Float // margen sobre costo aterrizado en COP. TODO(cliente)
+  tarifa_lb_usd   Float // tarifa del casillero por libra. TODO(cliente)
+  sales_tax_pct   Float // sales tax US estimado. TODO(cliente)
+  trm_buffer_pct  Float // colchón sobre la TRM oficial. TODO(cliente)
+  redondeo_cop    Int // redondear el precio final hacia arriba a múltiplos de este valor
+  pesos_categoria Json // { "tenis": 2.6, "perfume": 1.1, ... } en libras. TODO(cliente)
+  ig_handle       String // @usuario de Instagram de la tienda
+  lema            String   @default("De USA a tu puerta")
+  color_marca     String // hex, para la plantilla de historia
+  updatedAt       DateTime @updatedAt
+}
+
+model Cotizacion {
+  id               String  @id @default(cuid())
+  url              String
+  nombre           String
+  imagen_url       String? // URL de la imagen original del retailer (hotlink, camino por URL)
+  captura_url      String? // URL en Blob de la captura subida (camino por captura)
+  /// "url" | "captura" — de dónde salieron los datos de esta cotización.
+  imagen_origen    String  @default("url")
+  /// Recuadro de la foto del producto dentro de la captura, en fracciones
+  /// 0..1: { x, y, ancho, alto }. Null = usar la captura completa.
+  recorte          Json?
+  /// Foto puesta a mano para la historia. Reemplaza a la captura solo como
+  /// asset visual; `captura_url` se conserva intacta como evidencia.
+  historia_url     String?
+  /// Recuadro dentro de `historia_url`, mismo formato que `recorte`.
+  historia_recorte Json?
+  categoria        String
+  talla_notas      String?
+  precio_usd       Float
+  peso_lb          Float
+
+  // Snapshot del cálculo al momento de cotizar (nunca recalcular histórico)
+  tax_usd      Float
+  flete_usd    Float
+  trm_oficial  Float
+  trm_aplicada Float
+  costo_cop    Float
+  margen_cop   Float
+  precio_cop   Int
+  desglose     Json // copia completa de parámetros usados (auditoría)
+
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+/// Caché diario de la TRM oficial (datos.gov.co). La fila más reciente sirve
+/// de respaldo cuando la API pública falla.
+
+model TrmCache {
+  dia       String   @id // día de consulta en Bogotá, "YYYY-MM-DD"
+  valor     Float
+  vigencia  String // vigenciadesde de la TRM devuelta por datos.gov.co
+  fetchedAt DateTime @default(now())
+}
+
+model User {
+  id            String    @id
+  name          String
+  email         String
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}

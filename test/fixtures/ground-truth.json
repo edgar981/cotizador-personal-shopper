@@ -1,0 +1,10 @@
+{
+  "producto-promocion.png": {
+    "precio_usd": 109.99,
+    "categoria_sugerida": "tenis"
+  },
+  "producto-simple.png": {
+    "precio_usd": 175,
+    "categoria_sugerida": "perfume"
+  }
+}
