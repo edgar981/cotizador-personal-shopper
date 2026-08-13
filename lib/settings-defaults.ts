@@ -13,15 +13,29 @@ export type ZonaEnvio = {
 };
 
 /**
- * Zonas iniciales de referencia. Los nombres y valores son estimaciones
- * nuestras, no tarifas reales de ninguna transportadora: se editan enteras
- * desde /config. TODO(cliente).
+ * Zonas iniciales, solo para instalaciones nuevas. Se editan enteras desde
+ * /config y ahí siguen presentándose como valores de referencia.
+ *
+ * Tarifa PLANA (`adicional_lb_cop = 0`) a propósito: según los envíos reales,
+ * Interrapidísimo cobra prácticamente lo mismo para paquetes livianos, que son
+ * casi todos. Bogotá y ciudades principales salen de envíos reales; resto del
+ * país y municipio siguen siendo estimaciones.
+ *
+ * LIMITACIÓN CONOCIDA: con el adicional en 0, un paquete pesado se cotiza igual
+ * que uno liviano. Es exacto para el rango que ella maneja hoy y no requiere
+ * migración. Si con el uso aparecen paquetes pesados mal estimados, la
+ * evolución correcta NO es volver a la fórmula lineal (tampoco reflejaba la
+ * realidad) sino pasar a rangos de peso por zona (`hasta_lb → precio`). Eso sí
+ * requiere cambio de modelo, así que pide evidencia de uso antes.
+ *
+ * El modelo de cálculo no cambia: sigue siendo `base + peso × adicional`, y la
+ * tarifa plana es simplemente el caso con adicional en 0.
  */
 export const ZONAS_ENVIO_DEFAULT: ZonaEnvio[] = [
-  { nombre: "Bogotá", tarifa_base_cop: 12000, adicional_lb_cop: 2000 },
-  { nombre: "Ciudades principales", tarifa_base_cop: 16000, adicional_lb_cop: 2500 },
-  { nombre: "Resto del país", tarifa_base_cop: 22000, adicional_lb_cop: 3000 },
-  { nombre: "Municipio", tarifa_base_cop: 20000, adicional_lb_cop: 3000 },
+  { nombre: "Bogotá", tarifa_base_cop: 16000, adicional_lb_cop: 0 },
+  { nombre: "Ciudades principales", tarifa_base_cop: 18500, adicional_lb_cop: 0 },
+  { nombre: "Resto del país", tarifa_base_cop: 20000, adicional_lb_cop: 0 },
+  { nombre: "Municipio", tarifa_base_cop: 20000, adicional_lb_cop: 0 },
 ];
 
 /** Valores iniciales de referencia. TODO(cliente): ajustar a tarifas reales. */

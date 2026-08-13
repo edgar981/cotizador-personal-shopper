@@ -25,23 +25,36 @@ export type { ZonaEnvio };
 const EPSILON = 1e-9;
 
 /**
- * `tarifa_base_cop + (peso_lb × adicional_lb_cop)`, redondeado hacia arriba al
- * múltiplo de `redondeo_cop` (el mismo de Settings que usa el precio).
+ * Paso de redondeo del envío. A propósito NO es `redondeo_cop`.
+ *
+ * `redondeo_cop` (5.000) es del precio publicado: ahí redondear hacia arriba se
+ * ve mejor y protege el margen. Sobre un envío ese mismo paso distorsiona
+ * demasiado — 17.200 se convertía en 20.000, casi 3.000 de más sobre un número
+ * que la usuaria le dice a una clienta como referencia. Con 500 el estimado
+ * queda fino y sigue siendo un número redondo de decir por chat.
+ *
+ * Constante local y no campo de `Settings`: no hay evidencia de que necesite
+ * configurarse, y cada campo extra en Config es ruido.
  */
-export function calcularEnvioNacional(
-  zona: ZonaEnvio,
-  peso_lb: number,
-  redondeo_cop: number,
-): number {
+export const REDONDEO_ENVIO_COP = 500;
+
+/**
+ * `tarifa_base_cop + (peso_lb × adicional_lb_cop)`, redondeado hacia arriba al
+ * múltiplo de `REDONDEO_ENVIO_COP`.
+ *
+ * No recibe `redondeo_cop`: ese parámetro existía y se pasaba desde Settings,
+ * pero su uso quedó exclusivo de `precio_cop`. Quitarlo de la firma hace que la
+ * regla sea estructural y no una convención que se pueda romper sin querer.
+ */
+export function calcularEnvioNacional(zona: ZonaEnvio, peso_lb: number): number {
   const peso = Math.max(0, peso_lb || 0);
   const base = Math.max(0, zona.tarifa_base_cop || 0);
   const adicional = Math.max(0, zona.adicional_lb_cop || 0);
 
   const bruto = base + peso * adicional;
-  const paso = redondeo_cop > 0 ? redondeo_cop : 1;
 
   // Math.max evita que un bruto de 0 devuelva -0.
-  return Math.max(0, Math.ceil(bruto / paso - EPSILON) * paso);
+  return Math.max(0, Math.ceil(bruto / REDONDEO_ENVIO_COP - EPSILON) * REDONDEO_ENVIO_COP);
 }
 
 /** Busca una zona por nombre, sin distinguir mayúsculas ni espacios sobrantes. */

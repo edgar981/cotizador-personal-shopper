@@ -141,11 +141,8 @@ export function NuevaCotizacion({ settings, trm }: Props) {
     [settings.zonas_envio, zona],
   );
   const envioCop = useMemo(
-    () =>
-      zonaElegida
-        ? calcularEnvioNacional(zonaElegida, aNumero(campos.peso_lb), settings.redondeo_cop)
-        : null,
-    [zonaElegida, campos.peso_lb, settings.redondeo_cop],
+    () => (zonaElegida ? calcularEnvioNacional(zonaElegida, aNumero(campos.peso_lb)) : null),
+    [zonaElegida, campos.peso_lb],
   );
 
   const calculo = useMemo(

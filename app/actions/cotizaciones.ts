@@ -80,9 +80,7 @@ export async function guardarCotizacion(
   // snapshot, igual que el precio. Deliberadamente fuera de `calculo`: no toca
   // `costo_cop`, `margen_cop` ni `precio_cop`.
   const zona = buscarZona(settings.zonas_envio, datos.zona_envio);
-  const envio_nacional_cop = zona
-    ? calcularEnvioNacional(zona, datos.peso_lb, settings.redondeo_cop)
-    : null;
+  const envio_nacional_cop = zona ? calcularEnvioNacional(zona, datos.peso_lb) : null;
 
   const cotizacion = await prisma.cotizacion.create({
     data: {
