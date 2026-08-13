@@ -839,14 +839,25 @@ export function NuevaCotizacion({ settings, trm }: Props) {
                   </Select>
 
                   {zonaElegida && envioCop !== null ? (
-                    <p className="mt-2 text-sm">
-                      Envío nacional a {zonaElegida.nombre}:{" "}
-                      <span className="font-semibold tabular-nums">{formatearCOP(envioCop)}</span>
-                    </p>
+                    <>
+                      <p className="mt-2 text-sm">
+                        Envío nacional a {zonaElegida.nombre}:{" "}
+                        <span className="font-semibold tabular-nums">{formatearCOP(envioCop)}</span>
+                      </p>
+                      {/* Suma de referencia para responder por chat. Es solo
+                          presentación: `precio_cop` no la conoce y lo que se
+                          publica sigue siendo el precio de arriba. */}
+                      <p className="mt-1 text-sm">
+                        Total con envío a {zonaElegida.nombre}:{" "}
+                        <span className="font-semibold tabular-nums">
+                          {formatearCOP(calculo.precio_cop + envioCop)}
+                        </span>
+                      </p>
+                    </>
                   ) : null}
 
                   <p className="text-muted-foreground mt-1 text-xs">
-                    No incluido en el precio publicado.
+                    El envío no está incluido en el precio publicado.
                   </p>
                 </div>
               ) : null}

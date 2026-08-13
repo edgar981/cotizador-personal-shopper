@@ -114,8 +114,16 @@ export default async function DetallePage({
               <p className="text-lg font-semibold tabular-nums">
                 {formatearCOP(c.envio_nacional_cop)}
               </p>
+              {/* Suma de referencia sobre el snapshot guardado, igual que en la
+                  pantalla de cotizar: `precio_cop` no la conoce. */}
+              <p className="mt-2 text-sm">
+                Total con envío a {c.zona_envio}:{" "}
+                <span className="font-semibold tabular-nums">
+                  {formatearCOP(c.precio_cop + c.envio_nacional_cop)}
+                </span>
+              </p>
               <p className="text-muted-foreground mt-1 text-xs">
-                No incluido en el precio publicado.
+                El envío no está incluido en el precio publicado.
               </p>
             </div>
           ) : null}
