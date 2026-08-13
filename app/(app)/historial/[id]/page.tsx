@@ -6,6 +6,7 @@ import { BotonHistoria } from "@/components/boton-historia";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatearCOP } from "@/lib/cotizador";
+import { construirHref, leerFiltros, type ParamsHistorial } from "@/lib/historial-filtros";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -19,12 +20,20 @@ const formatoFecha = new Intl.DateTimeFormat("es-CO", {
 
 export default async function DetallePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<ParamsHistorial>;
 }) {
   const { id } = await params;
   const c = await prisma.cotizacion.findUnique({ where: { id } });
   if (!c) notFound();
+
+  // Los filtros llegan colgados del enlace que trajo hasta acá: volver devuelve
+  // a la misma vista filtrada y no al historial completo. Se parsean con el
+  // mismo `leerFiltros` del listado, así un parámetro inválido no se propaga.
+  const { filtros, limite } = leerFiltros(await searchParams);
+  const hrefVolver = construirHref(filtros, {}, limite);
 
   const snapshot = (c.desglose ?? {}) as Record<string, unknown>;
   const trmVigencia = typeof snapshot.trm_vigencia === "string" ? snapshot.trm_vigencia : null;
@@ -32,7 +41,7 @@ export default async function DetallePage({
   return (
     <div className="mx-auto w-full max-w-lg px-5 pt-8">
       <Link
-        href="/historial"
+        href={hrefVolver}
         className="text-muted-foreground mb-4 inline-flex items-center gap-1.5 text-sm"
       >
         <ArrowLeft className="size-4" aria-hidden />

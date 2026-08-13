@@ -4,11 +4,13 @@ import { Check, Download, Layers, Loader2, Share2, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { HistorialFiltros } from "@/components/historial-filtros";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { compartir, descargar, nombreArchivo, usePuedeCompartir } from "@/lib/compartir";
 import { formatearCOP } from "@/lib/cotizador";
+import { hayFiltrosActivos, type FiltrosHistorial } from "@/lib/historial-filtros";
 import { cn } from "@/lib/utils";
 
 export type ItemHistorial = {
@@ -25,7 +27,28 @@ export type ItemHistorial = {
 /** La historia doble lleva exactamente dos productos. */
 const PRODUCTOS = 2;
 
-export function HistorialLista({ items }: { items: ItemHistorial[] }) {
+export function HistorialLista({
+  items,
+  filtros,
+  categorias,
+  total,
+  hrefCargarMas,
+  enElTope,
+  queryFiltros,
+}: {
+  items: ItemHistorial[];
+  filtros: FiltrosHistorial;
+  categorias: string[];
+  /** Cuántas coinciden con los filtros, no cuántas se están mostrando. */
+  total: number;
+  /** Null cuando ya se ven todas las que coinciden, o cuando se llegó al tope. */
+  hrefCargarMas: string | null;
+  /** Hay más resultados pero se alcanzó el tope de filas por consulta. */
+  enElTope: boolean;
+  /** Query string de los filtros (con `?`) o vacía. Se cuelga del enlace al
+   *  detalle para que su botón de volver regrese a esta misma vista. */
+  queryFiltros: string;
+}) {
   const [seleccionando, setSeleccionando] = useState(false);
   /** Array y no Set: el orden es el que sale en la historia. */
   const [seleccion, setSeleccion] = useState<string[]>([]);
@@ -40,6 +63,8 @@ export function HistorialLista({ items }: { items: ItemHistorial[] }) {
       if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
     };
   }, []);
+
+  const filtrando = hayFiltrosActivos(filtros);
 
   function alternar(id: string) {
     setSeleccion((previo) =>
@@ -109,7 +134,7 @@ export function HistorialLista({ items }: { items: ItemHistorial[] }) {
 
   return (
     <>
-      <div className="mb-5 flex items-center justify-between gap-3">
+      <div className="mb-4 flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">Historial</h1>
 
         {items.length >= PRODUCTOS ? (
@@ -133,6 +158,8 @@ export function HistorialLista({ items }: { items: ItemHistorial[] }) {
           </Button>
         ) : null}
       </div>
+
+      <HistorialFiltros filtros={filtros} categorias={categorias} />
 
       {preview ? (
         <Card className="mb-5">
@@ -175,81 +202,124 @@ export function HistorialLista({ items }: { items: ItemHistorial[] }) {
       ) : null}
 
       {items.length === 0 ? (
-        <p className="text-muted-foreground rounded-lg border border-dashed px-4 py-10 text-center text-sm">
-          Todavía no has guardado ninguna cotización.
-        </p>
+        filtrando ? (
+          // Vacío por los filtros, no por falta de cotizaciones.
+          <div className="rounded-lg border border-dashed px-4 py-10 text-center">
+            <p className="text-muted-foreground text-sm">
+              Ninguna cotización coincide con lo que buscas.
+            </p>
+            <Button asChild variant="outline" className="mt-4 h-10">
+              <Link href="/historial">Limpiar filtros</Link>
+            </Button>
+          </div>
+        ) : (
+          <p className="text-muted-foreground rounded-lg border border-dashed px-4 py-10 text-center text-sm">
+            Todavía no has guardado ninguna cotización.
+          </p>
+        )
       ) : (
-        <ul className={cn("divide-border divide-y", seleccionando && "pb-28")}>
-          {items.map((item) => {
-            const elegida = seleccion.includes(item.id);
-            const orden = seleccion.indexOf(item.id) + 1;
+        <>
+          {filtrando ? (
+            <p className="text-muted-foreground mb-2 text-xs">
+              {total === 1 ? "1 resultado" : `${total} resultados`}
+            </p>
+          ) : null}
 
-            const contenido = (
-              <>
-                <span className="bg-muted relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-lg">
-                  {item.imagen ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={item.imagen}
-                      alt=""
-                      className="size-full object-cover"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <span className="text-muted-foreground text-xs">sin foto</span>
-                  )}
+          <ul className={cn("divide-border divide-y", seleccionando && "pb-28")}>
+            {items.map((item) => {
+              const elegida = seleccion.includes(item.id);
+              const orden = seleccion.indexOf(item.id) + 1;
 
-                  {seleccionando ? (
-                    <span
-                      className={cn(
-                        "absolute inset-0 flex items-center justify-center text-sm font-semibold transition-colors",
-                        elegida ? "bg-primary/70 text-primary-foreground" : "bg-black/35",
-                      )}
-                    >
-                      {elegida ? orden : <Check className="size-4 opacity-40" aria-hidden />}
-                    </span>
-                  ) : null}
-                </span>
+              const contenido = (
+                <>
+                  <span className="bg-muted relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-lg">
+                    {item.imagen ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={item.imagen}
+                        alt=""
+                        className="size-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <span className="text-muted-foreground text-xs">sin foto</span>
+                    )}
 
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">{item.nombre}</span>
-                  <span className="text-muted-foreground mt-1 flex items-center gap-2 text-xs">
-                    <Badge variant="secondary" className="font-normal">
-                      {item.categoria}
-                    </Badge>
-                    {item.fecha}
+                    {seleccionando ? (
+                      <span
+                        className={cn(
+                          "absolute inset-0 flex items-center justify-center text-sm font-semibold transition-colors",
+                          elegida ? "bg-primary/70 text-primary-foreground" : "bg-black/35",
+                        )}
+                      >
+                        {elegida ? orden : <Check className="size-4 opacity-40" aria-hidden />}
+                      </span>
+                    ) : null}
                   </span>
-                </span>
 
-                <span className="shrink-0 text-sm font-semibold tabular-nums">
-                  {formatearCOP(item.precio_cop)}
-                </span>
-              </>
-            );
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{item.nombre}</span>
+                    <span className="text-muted-foreground mt-1 flex items-center gap-2 text-xs">
+                      <Badge variant="secondary" className="font-normal">
+                        {item.categoria}
+                      </Badge>
+                      {item.fecha}
+                    </span>
+                  </span>
 
-            return (
-              <li key={item.id}>
-                {seleccionando ? (
-                  <button
-                    type="button"
-                    onClick={() => alternar(item.id)}
-                    aria-pressed={elegida}
-                    className="flex w-full touch-manipulation items-center gap-3 py-3 text-left active:opacity-60"
-                  >
-                    {contenido}
-                  </button>
-                ) : (
-                  <Link
-                    href={`/historial/${item.id}`}
-                    className="flex touch-manipulation items-center gap-3 py-3 active:opacity-60"
-                  >
-                    {contenido}
-                  </Link>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                  <span className="shrink-0 text-sm font-semibold tabular-nums">
+                    {formatearCOP(item.precio_cop)}
+                  </span>
+                </>
+              );
+
+              return (
+                <li key={item.id}>
+                  {seleccionando ? (
+                    <button
+                      type="button"
+                      onClick={() => alternar(item.id)}
+                      aria-pressed={elegida}
+                      className="flex w-full touch-manipulation items-center gap-3 py-3 text-left active:opacity-60"
+                    >
+                      {contenido}
+                    </button>
+                  ) : (
+                    <Link
+                      href={`/historial/${item.id}${queryFiltros}`}
+                      className="flex touch-manipulation items-center gap-3 py-3 active:opacity-60"
+                    >
+                      {contenido}
+                    </Link>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+
+          {hrefCargarMas ? (
+            <Button
+              asChild
+              variant="outline"
+              className={cn("mt-4 h-11 w-full", seleccionando && "mb-28")}
+            >
+              {/* `scroll={false}` para no saltar arriba al traer el lote. */}
+              <Link href={hrefCargarMas} scroll={false} prefetch={false}>
+                Cargar más ({items.length} de {total})
+              </Link>
+            </Button>
+          ) : enElTope ? (
+            <p
+              className={cn(
+                "text-muted-foreground mt-4 rounded-md border border-dashed px-3 py-4 text-center text-xs",
+                seleccionando && "mb-28",
+              )}
+            >
+              Mostrando las {items.length} más recientes de {total}. Usa la búsqueda o los filtros
+              para llegar a las más antiguas.
+            </p>
+          ) : null}
+        </>
       )}
 
       {/* Barra de acción, por encima del tab bar (6rem + su safe area). Los `_`
@@ -258,7 +328,10 @@ export function HistorialLista({ items }: { items: ItemHistorial[] }) {
         <div className="bg-background/95 supports-[backdrop-filter]:bg-background/80 fixed inset-x-0 bottom-[calc(6rem_+_env(safe-area-inset-bottom))] z-30 border-t backdrop-blur">
           <div className="mx-auto flex max-w-lg items-center gap-3 px-5 py-3">
             <p className="text-muted-foreground min-w-0 flex-1 text-xs">
-              {motivo ?? `${elegidas.map((item) => item.nombre).join(" + ")}`}
+              {motivo ??
+                (elegidas.length === seleccion.length
+                  ? elegidas.map((item) => item.nombre).join(" + ")
+                  : `${seleccion.length} seleccionadas`)}
             </p>
             <Button
               type="button"
