@@ -1,12 +1,15 @@
 import "server-only";
 import { prisma } from "./prisma";
-import { normalizarPesos, SETTINGS_DEFAULTS, SETTINGS_ID } from "./settings-defaults";
+import { normalizarPesos, normalizarZonas, SETTINGS_DEFAULTS, SETTINGS_ID } from "./settings-defaults";
 
 export {
   SETTINGS_DEFAULTS,
   SETTINGS_ID,
+  ZONAS_ENVIO_DEFAULT,
   normalizarPesos,
+  normalizarZonas,
   type SettingsPlano,
+  type ZonaEnvio,
 } from "./settings-defaults";
 
 import type { SettingsPlano } from "./settings-defaults";
@@ -29,6 +32,7 @@ export async function obtenerSettings(): Promise<SettingsPlano> {
     trm_buffer_pct: fila.trm_buffer_pct,
     redondeo_cop: fila.redondeo_cop,
     pesos_categoria: normalizarPesos(fila.pesos_categoria),
+    zonas_envio: normalizarZonas(fila.zonas_envio),
     ig_handle: fila.ig_handle,
     lema: fila.lema,
     color_marca: fila.color_marca,

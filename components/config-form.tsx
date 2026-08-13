@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import type { SettingsPlano } from "@/lib/settings-defaults";
 
 type FilaPeso = { categoria: string; peso_lb: string };
+type FilaZona = { nombre: string; tarifa_base_cop: string; adicional_lb_cop: string };
 
 function aNumero(valor: string) {
   const n = Number(String(valor).replace(",", "."));
@@ -46,6 +47,14 @@ export function ConfigForm({ settings }: { settings: SettingsPlano }) {
     return filas.length ? filas : [{ categoria: "", peso_lb: "" }];
   });
 
+  const [zonas, setZonas] = useState<FilaZona[]>(() =>
+    settings.zonas_envio.map((z) => ({
+      nombre: z.nombre,
+      tarifa_base_cop: String(z.tarifa_base_cop),
+      adicional_lb_cop: String(z.adicional_lb_cop),
+    })),
+  );
+
   function set(clave: keyof typeof campos, valor: string) {
     setCampos((previo) => ({ ...previo, [clave]: valor }));
   }
@@ -54,6 +63,10 @@ export function ConfigForm({ settings }: { settings: SettingsPlano }) {
     setPesos((previo) =>
       previo.map((fila, i) => (i === indice ? { ...fila, ...parcial } : fila)),
     );
+  }
+
+  function setZona(indice: number, parcial: Partial<FilaZona>) {
+    setZonas((previo) => previo.map((fila, i) => (i === indice ? { ...fila, ...parcial } : fila)));
   }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -72,6 +85,18 @@ export function ConfigForm({ settings }: { settings: SettingsPlano }) {
       pesos_categoria: pesos
         .filter((fila) => fila.categoria.trim() || fila.peso_lb.trim())
         .map((fila) => ({ categoria: fila.categoria, peso_lb: aNumero(fila.peso_lb) })),
+      // Las filas en blanco se descartan: son las que quedaron de un "Agregar
+      // zona" que la usuaria no llegó a llenar.
+      zonas_envio: zonas
+        .filter(
+          (fila) =>
+            fila.nombre.trim() || fila.tarifa_base_cop.trim() || fila.adicional_lb_cop.trim(),
+        )
+        .map((fila) => ({
+          nombre: fila.nombre,
+          tarifa_base_cop: aNumero(fila.tarifa_base_cop),
+          adicional_lb_cop: aNumero(fila.adicional_lb_cop),
+        })),
     });
 
     setGuardando(false);
@@ -198,6 +223,93 @@ export function ConfigForm({ settings }: { settings: SettingsPlano }) {
           >
             <Plus className="size-4" aria-hidden />
             Agregar categoría
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardContent className="flex flex-col gap-3 pt-6">
+          <div>
+            <Label>Envío nacional en Colombia</Label>
+            <p className="text-muted-foreground mt-1 text-xs">
+              El casillero entrega en Bogotá; desde ahí sale el envío al destino final. Estos
+              valores son de referencia — ajústalos a lo que te cobran de verdad.
+            </p>
+            <p className="text-muted-foreground mt-1 text-xs">
+              No se suma al precio publicado: sirve para responder rápido cuánto sale a cada
+              ciudad.
+            </p>
+          </div>
+
+          {zonas.length ? (
+            <div className="text-muted-foreground grid grid-cols-[1fr_5.5rem_5.5rem_2.75rem] items-center gap-2 text-[11px]">
+              <span>Zona</span>
+              <span>Base</span>
+              <span>Por libra</span>
+              <span />
+            </div>
+          ) : null}
+
+          {zonas.map((fila, indice) => (
+            <div
+              key={indice}
+              className="grid grid-cols-[1fr_5.5rem_5.5rem_2.75rem] items-center gap-2"
+            >
+              <Input
+                value={fila.nombre}
+                onChange={(e) => setZona(indice, { nombre: e.target.value })}
+                placeholder="Bogotá"
+                className="h-11"
+                aria-label={`Nombre de la zona ${indice + 1}`}
+              />
+              <Input
+                value={fila.tarifa_base_cop}
+                onChange={(e) => setZona(indice, { tarifa_base_cop: e.target.value })}
+                placeholder="12000"
+                inputMode="numeric"
+                className="h-11"
+                aria-label={`Tarifa base de la zona ${indice + 1}`}
+              />
+              <Input
+                value={fila.adicional_lb_cop}
+                onChange={(e) => setZona(indice, { adicional_lb_cop: e.target.value })}
+                placeholder="2000"
+                inputMode="numeric"
+                className="h-11"
+                aria-label={`Adicional por libra de la zona ${indice + 1}`}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-11 shrink-0"
+                onClick={() => setZonas((previo) => previo.filter((_, i) => i !== indice))}
+              >
+                <X className="size-4" aria-hidden />
+                <span className="sr-only">Quitar zona</span>
+              </Button>
+            </div>
+          ))}
+
+          {zonas.length === 0 ? (
+            <p className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-center text-xs">
+              Sin zonas configuradas. El estimado de envío no aparecerá al cotizar.
+            </p>
+          ) : null}
+
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11"
+            onClick={() =>
+              setZonas((previo) => [
+                ...previo,
+                { nombre: "", tarifa_base_cop: "", adicional_lb_cop: "" },
+              ])
+            }
+          >
+            <Plus className="size-4" aria-hidden />
+            Agregar zona
           </Button>
         </CardContent>
       </Card>

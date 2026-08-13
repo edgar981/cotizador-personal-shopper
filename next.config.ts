@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   // función que renderiza la historia.
   outputFileTracingIncludes: {
     "/api/historia/[id]": ["./assets/fonts/**"],
+    // La historia doble se renderiza en otra función: necesita su propia copia
+    // de las fuentes o en producción falla al no encontrar los .ttf.
+    "/api/historia-doble": ["./assets/fonts/**"],
   },
 };
 

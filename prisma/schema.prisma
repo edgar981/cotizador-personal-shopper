@@ -24,6 +24,27 @@ model Settings {
   trm_buffer_pct  Float // colchón sobre la TRM oficial. TODO(cliente)
   redondeo_cop    Int // redondear el precio final hacia arriba a múltiplos de este valor
   pesos_categoria Json // { "tenis": 2.6, "perfume": 1.1, ... } en libras. TODO(cliente)
+  /// Tramo nacional Bogotá → destino final, normalmente Interrapidísimo:
+  /// [{ nombre, tarifa_base_cop, adicional_lb_cop }]. TODO(cliente).
+  ///
+  /// OJO — esta columna tiene TRES estados con significado distinto, y el
+  /// `?` es semántico, no un descuido. `null` y `[]` NO son lo mismo:
+  ///
+  ///   null      → la fila es anterior a esta feature (la migración solo
+  ///               agregó la columna, sin backfill). Se muestran las zonas de
+  ///               referencia para que haya algo editable de entrada.
+  ///   []        → la usuaria borró todas las zonas a propósito. Se respeta:
+  ///               el estimador queda apagado y el selector no aparece.
+  ///   [ ...  ]  → tabla activa; es la que se usa para cotizar.
+  ///
+  /// Si algún día se hace backfill de `null` a `[]`, o se pone la columna como
+  /// NOT NULL con default `[]`, se pierde la diferencia entre "nunca se
+  /// configuró" y "se desactivó": las filas viejas dejarían de mostrar zonas y
+  /// el estimador desaparecería sin que nadie lo haya apagado.
+  ///
+  /// La lógica vive en `normalizarZonas()` (lib/settings-defaults.ts) y está
+  /// cubierta por los tests de lib/envio.test.ts.
+  zonas_envio     Json?
   ig_handle       String // @usuario de Instagram de la tienda
   lema            String   @default("De USA a tu puerta")
   color_marca     String // hex, para la plantilla de historia
@@ -50,6 +71,12 @@ model Cotizacion {
   talla_notas      String?
   precio_usd       Float
   peso_lb          Float
+
+  /// Estimado del tramo nacional al momento de guardar. Es una referencia
+  /// aparte: NO entra en `costo_cop`, `margen_cop` ni `precio_cop`, y no
+  /// aparece en la historia.
+  zona_envio         String?
+  envio_nacional_cop Int?
 
   // Snapshot del cálculo al momento de cotizar (nunca recalcular histórico)
   tax_usd      Float

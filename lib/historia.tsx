@@ -17,9 +17,11 @@ export const HISTORIA_ALTO = 1920;
 const TIMEOUT_IMAGEN_MS = 6000;
 const MAX_BYTES_IMAGEN = 6 * 1024 * 1024;
 
-export type DatosHistoria = {
-  nombre: string;
-  precio_cop: number;
+/**
+ * De dónde puede salir la foto. Vive aparte del resto de `DatosHistoria`
+ * porque la plantilla doble reutiliza la misma cascada por cada producto.
+ */
+export type FuentesImagen = {
   /** Foto elegida a mano para la historia. Manda sobre todo lo demás. */
   historia_url?: string | null;
   /** Recuadro dentro de `historia_url`. */
@@ -29,6 +31,11 @@ export type DatosHistoria = {
   /** Recuadro de la foto dentro de la captura. Null = captura completa. */
   recorte?: Recorte | null;
   imagen_url?: string | null;
+};
+
+export type DatosHistoria = FuentesImagen & {
+  nombre: string;
+  precio_cop: number;
   talla_notas?: string | null;
   ig_handle: string;
   lema: string;
@@ -42,7 +49,7 @@ let fuentesCache: Array<{ name: string; data: ArrayBuffer; weight: 400 | 800 }> 
  * Inter (SIL OFL) va embebida en `assets/fonts` — ver `outputFileTracingIncludes`
  * en next.config.ts para que Vercel la incluya en el bundle de la función.
  */
-async function cargarFuentes() {
+export async function cargarFuentes() {
   if (fuentesCache) return fuentesCache;
   const base = join(process.cwd(), "assets", "fonts");
   const [regular, extraBold] = await Promise.all([
@@ -61,7 +68,7 @@ async function cargarFuentes() {
  * hotlinking o tarda demasiado, devolvemos null y la historia usa el fallback
  * de color de marca (riesgo aceptado en v1).
  */
-type ImagenCargada = { dataUri: string; ancho: number; alto: number };
+export type ImagenCargada = { dataUri: string; ancho: number; alto: number };
 
 async function imagenComoDataUri(url?: string | null): Promise<ImagenCargada | null> {
   if (!url) return null;
@@ -100,7 +107,7 @@ async function imagenComoDataUri(url?: string | null): Promise<ImagenCargada | n
   }
 }
 
-function recortar(texto: string, maximo: number) {
+export function recortar(texto: string, maximo: number) {
   return texto.length > maximo ? `${texto.slice(0, maximo - 1)}…` : texto;
 }
 
@@ -109,8 +116,8 @@ function recortar(texto: string, maximo: number) {
  * negociación de formato. El hotlink al retailer queda de respaldo para las
  * cotizaciones creadas por el camino de URL.
  */
-async function mejorImagen(
-  datos: DatosHistoria,
+export async function mejorImagen(
+  datos: FuentesImagen,
 ): Promise<{ imagen: ImagenCargada; recorte: Recorte | null } | null> {
   // Orden: foto puesta a mano → captura recortada → hotlink del retailer (que
   // ya viene encuadrado en el producto, por eso va sin recorte).

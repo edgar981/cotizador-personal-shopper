@@ -23,6 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { compartir, descargar, nombreArchivo, usePuedeCompartir } from "@/lib/compartir";
 import { comprimirImagen, ImagenInvalida } from "@/lib/comprimir-imagen";
 import { calcularCotizacion, formatearCOP, formatearTRM } from "@/lib/cotizador";
+import { buscarZona, calcularEnvioNacional } from "@/lib/envio";
 import { conformarAspecto, type Recorte } from "@/lib/recorte";
 import type { SettingsPlano } from "@/lib/settings-defaults";
 import type { Trm } from "@/lib/trm";
@@ -42,6 +43,9 @@ type Campos = {
 };
 
 type Origen = "url" | "captura";
+
+/** Radix no admite `value=""` en un item; este centinela limpia la selección. */
+const SIN_ZONA = "__sin_zona__";
 
 const CAMPOS_VACIOS: Campos = {
   nombre: "",
@@ -126,6 +130,23 @@ export function NuevaCotizacion({ settings, trm }: Props) {
       if (historiaPreviewRef.current) URL.revokeObjectURL(historiaPreviewRef.current);
     };
   }, []);
+
+  /**
+   * Zona del tramo nacional. Vive aparte del cálculo: cambiarla no toca el
+   * precio publicado ni invalida la historia ya generada.
+   */
+  const [zona, setZona] = useState("");
+  const zonaElegida = useMemo(
+    () => buscarZona(settings.zonas_envio, zona),
+    [settings.zonas_envio, zona],
+  );
+  const envioCop = useMemo(
+    () =>
+      zonaElegida
+        ? calcularEnvioNacional(zonaElegida, aNumero(campos.peso_lb), settings.redondeo_cop)
+        : null,
+    [zonaElegida, campos.peso_lb, settings.redondeo_cop],
+  );
 
   const calculo = useMemo(
     () =>
@@ -476,6 +497,9 @@ export function NuevaCotizacion({ settings, trm }: Props) {
       talla_notas: campos.talla_notas.trim() || null,
       precio_usd: aNumero(campos.precio_usd),
       peso_lb: aNumero(campos.peso_lb),
+      // El servidor recalcula el envío con las tarifas vigentes; aquí solo va
+      // la zona elegida.
+      zona_envio: zonaElegida?.nombre ?? null,
     });
     setGuardando(false);
 
@@ -785,6 +809,47 @@ export function NuevaCotizacion({ settings, trm }: Props) {
                   {formatearCOP(calculo.precio_cop)}
                 </p>
               </div>
+
+              {/* Referencia aparte, deliberadamente menor que el precio: no se
+                  publica ni entra en el cálculo, solo sirve para responderle a
+                  una clienta cuánto le sale hasta su ciudad. */}
+              {settings.zonas_envio.length ? (
+                <div className="mt-4 border-t pt-4">
+                  <Label
+                    htmlFor="zona"
+                    className="text-muted-foreground text-xs tracking-wide uppercase"
+                  >
+                    Envío nacional
+                  </Label>
+                  <Select
+                    value={zona}
+                    onValueChange={(valor) => setZona(valor === SIN_ZONA ? "" : valor)}
+                  >
+                    <SelectTrigger id="zona" className="mt-2 h-10 w-full">
+                      <SelectValue placeholder="Elige la zona de entrega" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {settings.zonas_envio.map((z) => (
+                        <SelectItem key={z.nombre} value={z.nombre}>
+                          {z.nombre}
+                        </SelectItem>
+                      ))}
+                      {zona ? <SelectItem value={SIN_ZONA}>Sin zona</SelectItem> : null}
+                    </SelectContent>
+                  </Select>
+
+                  {zonaElegida && envioCop !== null ? (
+                    <p className="mt-2 text-sm">
+                      Envío nacional a {zonaElegida.nombre}:{" "}
+                      <span className="font-semibold tabular-nums">{formatearCOP(envioCop)}</span>
+                    </p>
+                  ) : null}
+
+                  <p className="text-muted-foreground mt-1 text-xs">
+                    No incluido en el precio publicado.
+                  </p>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
 

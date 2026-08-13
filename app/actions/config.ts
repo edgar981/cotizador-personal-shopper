@@ -35,6 +35,22 @@ const esquema = z.object({
       }),
     )
     .min(1, "Deja al menos una categoría."),
+  // Sin mínimo: dejar la tabla vacía apaga el estimador de envío nacional.
+  zonas_envio: z
+    .array(
+      z.object({
+        nombre: z.string().trim().min(1, "El nombre de la zona no puede ir vacío.").max(40),
+        tarifa_base_cop: z
+          .number()
+          .min(0, "La tarifa base no puede ser negativa.")
+          .max(10_000_000, "¿Seguro? Esa tarifa es demasiado alta."),
+        adicional_lb_cop: z
+          .number()
+          .min(0, "El adicional por libra no puede ser negativo.")
+          .max(10_000_000, "¿Seguro? Ese adicional es demasiado alto."),
+      }),
+    )
+    .default([]),
 });
 
 export type EntradaConfig = z.infer<typeof esquema>;
@@ -59,6 +75,24 @@ export async function guardarConfig(entrada: EntradaConfig): Promise<ResultadoCo
     pesos[clave] = peso_lb;
   }
 
+  // El nombre es la clave con la que cada cotización guarda su zona: no puede
+  // haber dos iguales. Se conserva tal como se escribió (es una etiqueta que
+  // se muestra), pero se compara sin distinguir mayúsculas.
+  const vistas = new Set<string>();
+  for (const { nombre } of d.zonas_envio) {
+    const clave = nombre.toLowerCase();
+    if (vistas.has(clave)) {
+      return { ok: false, error: `La zona "${nombre}" está repetida.` };
+    }
+    vistas.add(clave);
+  }
+  // Los pesos colombianos no tienen centavos; redondeamos en vez de rechazar.
+  const zonas = d.zonas_envio.map((z) => ({
+    nombre: z.nombre,
+    tarifa_base_cop: Math.round(z.tarifa_base_cop),
+    adicional_lb_cop: Math.round(z.adicional_lb_cop),
+  }));
+
   const datos = {
     margen_pct: d.margen_pct / 100,
     sales_tax_pct: d.sales_tax_pct / 100,
@@ -66,6 +100,7 @@ export async function guardarConfig(entrada: EntradaConfig): Promise<ResultadoCo
     tarifa_lb_usd: d.tarifa_lb_usd,
     redondeo_cop: d.redondeo_cop,
     pesos_categoria: pesos,
+    zonas_envio: zonas,
     ig_handle: d.ig_handle.startsWith("@") ? d.ig_handle : `@${d.ig_handle}`,
     lema: d.lema,
     color_marca: d.color_marca.toUpperCase(),

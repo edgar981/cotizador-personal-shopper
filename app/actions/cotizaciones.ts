@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { calcularCotizacion } from "@/lib/cotizador";
+import { buscarZona, calcularEnvioNacional } from "@/lib/envio";
 import { prisma } from "@/lib/prisma";
 import { normalizarRecorte } from "@/lib/recorte";
 import { requerirSesion } from "@/lib/session";
@@ -29,6 +30,9 @@ const esquema = z.object({
   talla_notas: z.string().trim().max(300).optional().nullable(),
   precio_usd: z.number().positive("El precio en USD debe ser mayor que 0."),
   peso_lb: z.number().positive("El peso debe ser mayor que 0."),
+  /// Nombre de la zona del tramo nacional. Opcional: la usuaria solo la elige
+  /// cuando una clienta pregunta por su ciudad.
+  zona_envio: z.string().trim().max(40).optional().nullable(),
 });
 
 export type EntradaCotizacion = z.infer<typeof esquema>;
@@ -72,6 +76,14 @@ export async function guardarCotizacion(
   };
   const calculo = calcularCotizacion(parametros);
 
+  // Tramo nacional: se resuelve contra las tarifas vigentes y se congela como
+  // snapshot, igual que el precio. Deliberadamente fuera de `calculo`: no toca
+  // `costo_cop`, `margen_cop` ni `precio_cop`.
+  const zona = buscarZona(settings.zonas_envio, datos.zona_envio);
+  const envio_nacional_cop = zona
+    ? calcularEnvioNacional(zona, datos.peso_lb, settings.redondeo_cop)
+    : null;
+
   const cotizacion = await prisma.cotizacion.create({
     data: {
       url: datos.url,
@@ -86,6 +98,8 @@ export async function guardarCotizacion(
       talla_notas: datos.talla_notas || null,
       precio_usd: datos.precio_usd,
       peso_lb: datos.peso_lb,
+      zona_envio: zona?.nombre ?? null,
+      envio_nacional_cop,
       tax_usd: calculo.tax_usd,
       flete_usd: calculo.flete_usd,
       trm_oficial: trm.valor,
@@ -98,6 +112,9 @@ export async function guardarCotizacion(
         calculo,
         trm_vigencia: trm.vigencia,
         trm_desde_cache: trm.desdeCache,
+        // Tarifa exacta usada, para poder auditar un estimado viejo aunque la
+        // tabla de zonas haya cambiado después.
+        envio: zona ? { ...zona, envio_nacional_cop } : null,
         // Snapshot de la marca para que la historia se regenere igual siempre.
         ig_handle: settings.ig_handle,
         lema: settings.lema,

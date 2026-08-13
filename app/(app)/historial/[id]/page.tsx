@@ -103,6 +103,22 @@ export default async function DetallePage({
               {formatearCOP(c.precio_cop)}
             </p>
           </div>
+
+          {/* Estimado congelado al cotizar: si las tarifas cambiaron después,
+              esta cotización conserva el suyo. */}
+          {c.zona_envio && c.envio_nacional_cop !== null ? (
+            <div className="mt-4 border-t pt-4">
+              <p className="text-muted-foreground text-xs tracking-wide uppercase">
+                Envío nacional a {c.zona_envio}
+              </p>
+              <p className="text-lg font-semibold tabular-nums">
+                {formatearCOP(c.envio_nacional_cop)}
+              </p>
+              <p className="text-muted-foreground mt-1 text-xs">
+                No incluido en el precio publicado.
+              </p>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
