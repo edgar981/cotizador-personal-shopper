@@ -31,6 +31,7 @@ export async function obtenerSettings(): Promise<SettingsPlano> {
     sales_tax_pct: fila.sales_tax_pct,
     trm_buffer_pct: fila.trm_buffer_pct,
     redondeo_cop: fila.redondeo_cop,
+    comision_pct: fila.comision_pct,
     pesos_categoria: normalizarPesos(fila.pesos_categoria),
     zonas_envio: normalizarZonas(fila.zonas_envio),
     ig_handle: fila.ig_handle,

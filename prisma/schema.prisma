@@ -23,6 +23,9 @@ model Settings {
   sales_tax_pct   Float // sales tax US estimado. TODO(cliente)
   trm_buffer_pct  Float // colchón sobre la TRM oficial. TODO(cliente)
   redondeo_cop    Int // redondear el precio final hacia arriba a múltiplos de este valor
+  /// Porción del MARGEN que se va en comisión, en fracción (0.1 = 10%).
+  /// TODO(cliente). No toca `precio_cop`: reparte lo que la cotización ya deja.
+  comision_pct    Float    @default(0.1)
   pesos_categoria Json // { "tenis": 2.6, "perfume": 1.1, ... } en libras. TODO(cliente)
   /// Tramo nacional Bogotá → destino final, normalmente Interrapidísimo:
   /// [{ nombre, tarifa_base_cop, adicional_lb_cop }]. TODO(cliente).
@@ -77,6 +80,13 @@ model Cotizacion {
   /// aparece en la historia.
   zona_envio         String?
   envio_nacional_cop Int?
+
+  /// Reparto del margen al momento de cotizar. Derivadas de `margen_cop`, no
+  /// de `precio_cop`, y nunca aparecen en la historia: son internas.
+  /// `Float` como `margen_cop` (y no `Int` como el envío) para que
+  /// `comision_cop + margen_neto_cop` sume exactamente `margen_cop`.
+  comision_cop       Float?
+  margen_neto_cop    Float?
 
   // Snapshot del cálculo al momento de cotizar (nunca recalcular histórico)
   tax_usd      Float

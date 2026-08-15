@@ -38,6 +38,12 @@ export default async function DetallePage({
   const snapshot = (c.desglose ?? {}) as Record<string, unknown>;
   const trmVigencia = typeof snapshot.trm_vigencia === "string" ? snapshot.trm_vigencia : null;
 
+  // El pct sale del snapshot, no de la config vigente: una cotización vieja
+  // debe mostrar la comisión que tenía entonces.
+  const comisionSnapshot = (snapshot.comision ?? {}) as Record<string, unknown>;
+  const comisionPct =
+    typeof comisionSnapshot.pct === "number" ? comisionSnapshot.pct : null;
+
   return (
     <div className="mx-auto w-full max-w-lg px-5 pt-8">
       <Link
@@ -102,6 +108,9 @@ export default async function DetallePage({
               costo_cop: c.costo_cop,
               margen_cop: c.margen_cop,
               trm_vigencia: trmVigencia,
+              comision_pct: comisionPct,
+              comision_cop: c.comision_cop,
+              margen_neto_cop: c.margen_neto_cop,
             })}
           />
           <div className="mt-4 border-t pt-4">

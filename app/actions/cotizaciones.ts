@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { Prisma } from "@/app/generated/prisma/client";
+import { calcularComision } from "@/lib/comision";
 import { calcularCotizacion } from "@/lib/cotizador";
 import { buscarZona, calcularEnvioNacional } from "@/lib/envio";
 import { prisma } from "@/lib/prisma";
@@ -42,27 +44,20 @@ export type ResultadoGuardar =
   | { ok: false; error: string };
 
 /**
- * Persiste la cotización. El cálculo se rehace en el servidor con la config y
- * la TRM vigentes: lo que el cliente muestra es solo previsualización.
+ * Rehace el snapshot completo con la config y la TRM vigentes, y devuelve los
+ * campos tal como van a la tabla.
+ *
+ * Lo comparten crear y actualizar: si cada uno armara el suyo, actualizar
+ * podría dejar una fila con un desglose distinto al de una recién creada.
+ * Devuelve null si no hay TRM, que es el único caso en que no se puede cotizar.
  */
-export async function guardarCotizacion(
-  entrada: EntradaCotizacion,
-): Promise<ResultadoGuardar> {
-  await requerirSesion();
-
-  const parseo = esquema.safeParse(entrada);
-  if (!parseo.success) {
-    return { ok: false, error: parseo.error.issues[0]?.message ?? "Datos inválidos." };
-  }
-  const datos = parseo.data;
-
+async function construirSnapshot(
+  datos: EntradaCotizacion,
+  /** Solo al actualizar: la marca de publicación que traía el desglose. */
+  historiaGeneradaAt?: string,
+) {
   const [settings, trm] = await Promise.all([obtenerSettings(), obtenerTrm()]);
-  if (!trm) {
-    return {
-      ok: false,
-      error: "No pude obtener la TRM y no hay ningún valor guardado. Intenta de nuevo.",
-    };
-  }
+  if (!trm) return null;
 
   const parametros = {
     precio_usd: datos.precio_usd,
@@ -82,46 +77,154 @@ export async function guardarCotizacion(
   const zona = buscarZona(settings.zonas_envio, datos.zona_envio);
   const envio_nacional_cop = zona ? calcularEnvioNacional(zona, datos.peso_lb) : null;
 
-  const cotizacion = await prisma.cotizacion.create({
-    data: {
-      url: datos.url,
-      nombre: datos.nombre,
-      imagen_url: datos.imagen_url || null,
-      captura_url: datos.captura_url || null,
-      imagen_origen: datos.imagen_origen,
-      recorte: normalizarRecorte(datos.recorte) ?? undefined,
-      historia_url: datos.historia_url || null,
-      historia_recorte: normalizarRecorte(datos.historia_recorte) ?? undefined,
-      categoria: datos.categoria,
-      talla_notas: datos.talla_notas || null,
-      precio_usd: datos.precio_usd,
-      peso_lb: datos.peso_lb,
-      zona_envio: zona?.nombre ?? null,
-      envio_nacional_cop,
-      tax_usd: calculo.tax_usd,
-      flete_usd: calculo.flete_usd,
-      trm_oficial: trm.valor,
-      trm_aplicada: calculo.trm_aplicada,
-      costo_cop: calculo.costo_cop,
-      margen_cop: calculo.margen_cop,
-      precio_cop: calculo.precio_cop,
-      desglose: {
-        parametros,
-        calculo,
-        trm_vigencia: trm.vigencia,
-        trm_desde_cache: trm.desdeCache,
-        // Tarifa exacta usada, para poder auditar un estimado viejo aunque la
-        // tabla de zonas haya cambiado después.
-        envio: zona ? { ...zona, envio_nacional_cop } : null,
-        // Snapshot de la marca para que la historia se regenere igual siempre.
-        ig_handle: settings.ig_handle,
-        lema: settings.lema,
-        color_marca: settings.color_marca,
-      },
+  // Reparto del margen. Derivado de `margen_cop`, nunca de `precio_cop`: es
+  // información interna y no altera lo que se publica.
+  const comision = calcularComision(calculo.margen_cop, settings.comision_pct);
+
+  return {
+    url: datos.url,
+    nombre: datos.nombre,
+    imagen_url: datos.imagen_url || null,
+    captura_url: datos.captura_url || null,
+    imagen_origen: datos.imagen_origen,
+    // `DbNull` y no `undefined`: en un update `undefined` significa "no toques
+    // este campo", así que quitar el recorte no lo borraría y la fila quedaría
+    // con el encuadre viejo. `DbNull` pone NULL en los dos caminos.
+    recorte: normalizarRecorte(datos.recorte) ?? Prisma.DbNull,
+    historia_url: datos.historia_url || null,
+    historia_recorte: normalizarRecorte(datos.historia_recorte) ?? Prisma.DbNull,
+    categoria: datos.categoria,
+    talla_notas: datos.talla_notas || null,
+    precio_usd: datos.precio_usd,
+    peso_lb: datos.peso_lb,
+    zona_envio: zona?.nombre ?? null,
+    envio_nacional_cop,
+    comision_cop: comision.comision_cop,
+    margen_neto_cop: comision.margen_neto_cop,
+    tax_usd: calculo.tax_usd,
+    flete_usd: calculo.flete_usd,
+    trm_oficial: trm.valor,
+    trm_aplicada: calculo.trm_aplicada,
+    costo_cop: calculo.costo_cop,
+    margen_cop: calculo.margen_cop,
+    precio_cop: calculo.precio_cop,
+    desglose: {
+      parametros,
+      calculo,
+      trm_vigencia: trm.vigencia,
+      trm_desde_cache: trm.desdeCache,
+      // Tarifa exacta usada, para poder auditar un estimado viejo aunque la
+      // tabla de zonas haya cambiado después.
+      envio: zona ? { ...zona, envio_nacional_cop } : null,
+      // El pct va al snapshot para poder etiquetar la línea en el detalle
+      // aunque la comisión configurada cambie después.
+      comision: { pct: settings.comision_pct, ...comision },
+      // Snapshot de la marca para que la historia se regenere igual siempre.
+      ig_handle: settings.ig_handle,
+      lema: settings.lema,
+      color_marca: settings.color_marca,
+      // El snapshot se rehace entero, pero haberse publicado no se deshace.
+      ...(historiaGeneradaAt ? { historia_generada_at: historiaGeneradaAt } : {}),
     },
+  };
+}
+
+const SIN_TRM =
+  "No pude obtener la TRM y no hay ningún valor guardado. Intenta de nuevo.";
+
+/**
+ * Persiste la cotización. El cálculo se rehace en el servidor con la config y
+ * la TRM vigentes: lo que el cliente muestra es solo previsualización.
+ */
+export async function guardarCotizacion(
+  entrada: EntradaCotizacion,
+): Promise<ResultadoGuardar> {
+  await requerirSesion();
+
+  const parseo = esquema.safeParse(entrada);
+  if (!parseo.success) {
+    return { ok: false, error: parseo.error.issues[0]?.message ?? "Datos inválidos." };
+  }
+
+  const snapshot = await construirSnapshot(parseo.data);
+  if (!snapshot) return { ok: false, error: SIN_TRM };
+
+  const cotizacion = await prisma.cotizacion.create({
+    data: snapshot,
     select: { id: true },
   });
 
   revalidatePath("/historial");
   return { ok: true, id: cotizacion.id };
+}
+
+/**
+ * Reescribe una cotización ya guardada con los valores nuevos, rehaciendo el
+ * snapshot igual que al crearla.
+ *
+ * Existe porque generar la historia guarda: si después se corrige un campo, esa
+ * corrección tiene que llegar a la fila que ya existe en vez de perderse o de
+ * crear un duplicado.
+ */
+export async function actualizarCotizacion(
+  id: string,
+  entrada: EntradaCotizacion,
+): Promise<ResultadoGuardar> {
+  await requerirSesion();
+
+  const parseo = esquema.safeParse(entrada);
+  if (!parseo.success) {
+    return { ok: false, error: parseo.error.issues[0]?.message ?? "Datos inválidos." };
+  }
+
+  const existente = await prisma.cotizacion.findUnique({
+    where: { id },
+    select: { desglose: true },
+  });
+  if (!existente) return { ok: false, error: "Esa cotización ya no existe." };
+
+  // La marca de publicación se rescata del desglose anterior y se reinyecta.
+  const previo = (existente.desglose ?? {}) as Record<string, unknown>;
+  const marca =
+    typeof previo.historia_generada_at === "string" ? previo.historia_generada_at : undefined;
+
+  const snapshot = await construirSnapshot(parseo.data, marca);
+  if (!snapshot) return { ok: false, error: SIN_TRM };
+
+  await prisma.cotizacion.update({ where: { id }, data: snapshot });
+
+  revalidatePath("/historial");
+  revalidatePath(`/historial/${id}`);
+  return { ok: true, id };
+}
+
+/**
+ * Deja constancia de que esta cotización llegó a publicarse.
+ *
+ * Se escribe dentro de `desglose`, el Json de auditoría que ya existe, en vez
+ * de una columna nueva: el modelo de datos no cambia y no hace falta migración.
+ * Si algún día la métrica se consulta seguido, conviene subirlo a columna con
+ * índice; hoy se lee con `desglose->>'historia_generada_at'`.
+ *
+ * Se conserva la PRIMERA vez: la métrica es "cuándo se publicó", no "cuándo se
+ * volvió a generar la imagen".
+ */
+export async function marcarHistoriaGenerada(id: string): Promise<void> {
+  await requerirSesion();
+
+  const fila = await prisma.cotizacion.findUnique({
+    where: { id },
+    select: { desglose: true },
+  });
+  if (!fila) return;
+
+  const desglose = (fila.desglose ?? {}) as Record<string, unknown>;
+  if (desglose.historia_generada_at) return;
+
+  await prisma.cotizacion.update({
+    where: { id },
+    data: { desglose: { ...desglose, historia_generada_at: new Date().toISOString() } },
+  });
+
+  revalidatePath("/historial");
 }

@@ -4,7 +4,12 @@ import { ClipboardPaste, Crop, Download, ImageIcon, Loader2, RefreshCw, Share2, 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { guardarCotizacion } from "@/app/actions/cotizaciones";
+import {
+  actualizarCotizacion,
+  guardarCotizacion,
+  marcarHistoriaGenerada,
+  type EntradaCotizacion,
+} from "@/app/actions/cotizaciones";
 import { Desglose, filasDesglose } from "@/components/desglose";
 import { AjustarRecorte } from "@/components/ajustar-recorte";
 import { SubirCaptura } from "@/components/subir-captura";
@@ -20,8 +25,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  borrarBorrador,
+  guardarBorrador,
+  leerBorrador,
+  type BorradorCotizacion,
+} from "@/lib/borrador";
 import { compartir, descargar, nombreArchivo, usePuedeCompartir } from "@/lib/compartir";
 import { comprimirImagen, ImagenInvalida } from "@/lib/comprimir-imagen";
+import { calcularComision } from "@/lib/comision";
 import { calcularCotizacion, formatearCOP, formatearTRM } from "@/lib/cotizador";
 import { buscarZona, calcularEnvioNacional } from "@/lib/envio";
 import { conformarAspecto, type Recorte } from "@/lib/recorte";
@@ -46,6 +58,9 @@ type Origen = "url" | "captura";
 
 /** Radix no admite `value=""` en un item; este centinela limpia la selección. */
 const SIN_ZONA = "__sin_zona__";
+
+/** Espera antes de escribir el borrador, para no tocar disco en cada tecla. */
+const ESPERA_BORRADOR_MS = 500;
 
 const CAMPOS_VACIOS: Campos = {
   nombre: "",
@@ -86,6 +101,12 @@ export function NuevaCotizacion({ settings, trm }: Props) {
   const [origen, setOrigen] = useState<Origen>("url");
   const [aviso, setAviso] = useState<string | null>(null);
 
+  /**
+   * Zona del tramo nacional. Vive aparte del cálculo: cambiarla no toca el
+   * precio publicado ni invalida la historia ya generada.
+   */
+  const [zona, setZona] = useState("");
+
   const [capturaUrl, setCapturaUrl] = useState<string | null>(null);
   const [capturaPreview, setCapturaPreview] = useState<string | null>(null);
   const [recorte, setRecorte] = useState<Recorte | null>(null);
@@ -123,6 +144,22 @@ export function NuevaCotizacion({ settings, trm }: Props) {
   const previewRef = useRef<string | null>(null);
   const capturaPreviewRef = useRef<string | null>(null);
 
+  /**
+   * Id de la cotización una vez persistida. Sirve para no crear duplicados: al
+   * generar la historia se guarda automáticamente, y el botón Guardar posterior
+   * no debe crear una segunda fila.
+   */
+  const [idGuardado, setIdGuardado] = useState<string | null>(null);
+  /**
+   * Payload serializado tal como quedó en la base. Comparar contra él dice si
+   * el formulario cambió después de guardar, y evita rehacer el snapshot —y
+   * con él la TRM— cuando en realidad no se tocó nada.
+   */
+  const [payloadGuardado, setPayloadGuardado] = useState<string | null>(null);
+  const [borradorRecuperado, setBorradorRecuperado] = useState(false);
+  /** Hasta que no se intente restaurar, no se escribe: se pisaría el borrador. */
+  const restauradoRef = useRef(false);
+
   useEffect(() => {
     return () => {
       if (previewRef.current) URL.revokeObjectURL(previewRef.current);
@@ -131,11 +168,66 @@ export function NuevaCotizacion({ settings, trm }: Props) {
     };
   }, []);
 
+  function aplicarBorrador(borrador: BorradorCotizacion) {
+    setUrl(borrador.url);
+    setCampos(borrador.campos);
+    setOrigen(borrador.origen);
+    setCapturaUrl(borrador.capturaUrl);
+    setCapturaPreview(borrador.capturaUrl);
+    setRecorte(borrador.recorte);
+    setMedidasCaptura(borrador.medidasCaptura);
+    setHistoriaUrl(borrador.historiaUrl);
+    setHistoriaPreview(borrador.historiaUrl);
+    setHistoriaRecorte(borrador.historiaRecorte);
+    setMedidasHistoria(borrador.medidasHistoria);
+    setZona(borrador.zona);
+    setFormVisible(borrador.formVisible);
+    setBorradorRecuperado(true);
+  }
+
+  function descartarBorrador() {
+    borrarBorrador();
+    setBorradorRecuperado(false);
+    setUrl("");
+    setCampos(CAMPOS_VACIOS);
+    setOrigen("url");
+    setFormVisible(false);
+    setAviso(null);
+    setZona("");
+
+    if (capturaPreviewRef.current) {
+      URL.revokeObjectURL(capturaPreviewRef.current);
+      capturaPreviewRef.current = null;
+    }
+    setCapturaUrl(null);
+    setCapturaPreview(null);
+    setRecorte(null);
+    setMedidasCaptura(null);
+    setAjustando(false);
+
+    quitarFotoHistoria();
+  }
+
   /**
-   * Zona del tramo nacional. Vive aparte del cálculo: cambiarla no toca el
-   * precio publicado ni invalida la historia ya generada.
+   * Restaura el borrador al montar. Va en un efecto y no en el render porque
+   * localStorage no existe en el servidor: leerlo durante el render haría que
+   * el HTML del servidor y el del cliente no coincidieran.
+   *
+   * Las vistas previas se reconstruyen desde las URL de Blob, que son remotas y
+   * sobreviven; las locales (`createObjectURL`) mueren con la pestaña, por eso
+   * no se guardan. Tampoco se tocan los refs de revocación: esas URL no son
+   * nuestras y no hay que revocarlas.
    */
-  const [zona, setZona] = useState("");
+  useEffect(() => {
+    const borrador = leerBorrador();
+    restauradoRef.current = true;
+    /* La regla apunta a las cascadas de renders. Acá es una lectura única de un
+       sistema externo al montar: un solo render extra al entrar, y en render no
+       se puede hacer sin romper la hidratación. */
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (borrador) aplicarBorrador(borrador);
+  }, []);
+
   const zonaElegida = useMemo(
     () => buscarZona(settings.zonas_envio, zona),
     [settings.zonas_envio, zona],
@@ -144,6 +236,47 @@ export function NuevaCotizacion({ settings, trm }: Props) {
     () => (zonaElegida ? calcularEnvioNacional(zonaElegida, aNumero(campos.peso_lb)) : null),
     [zonaElegida, campos.peso_lb],
   );
+
+  /**
+   * Escribe el borrador cuando algo cambia. Se salta mientras no se haya
+   * intentado restaurar (pisaría lo guardado con el formulario vacío) y una vez
+   * que la cotización ya está persistida (ya no hay nada que rescatar).
+   */
+  useEffect(() => {
+    if (!restauradoRef.current || idGuardado) return;
+
+    const id = setTimeout(() => {
+      guardarBorrador({
+        guardadoEn: Date.now(),
+        url,
+        campos,
+        origen,
+        capturaUrl,
+        recorte,
+        medidasCaptura,
+        historiaUrl,
+        historiaRecorte,
+        medidasHistoria,
+        zona,
+        formVisible,
+      });
+    }, ESPERA_BORRADOR_MS);
+
+    return () => clearTimeout(id);
+  }, [
+    url,
+    campos,
+    origen,
+    capturaUrl,
+    recorte,
+    medidasCaptura,
+    historiaUrl,
+    historiaRecorte,
+    medidasHistoria,
+    zona,
+    formVisible,
+    idGuardado,
+  ]);
 
   const calculo = useMemo(
     () =>
@@ -158,6 +291,15 @@ export function NuevaCotizacion({ settings, trm }: Props) {
         redondeo_cop: settings.redondeo_cop,
       }),
     [campos.precio_usd, campos.peso_lb, settings, trm],
+  );
+
+  /**
+   * Reparto del margen, en vivo. Va aparte de `calculo` a propósito: se deriva
+   * de `margen_cop` y no toca `precio_cop` ni entra en la historia.
+   */
+  const comision = useMemo(
+    () => calcularComision(calculo.margen_cop, settings.comision_pct),
+    [calculo.margen_cop, settings.comision_pct],
   );
 
   function limpiarPreview() {
@@ -428,6 +570,50 @@ export function NuevaCotizacion({ settings, trm }: Props) {
     return null;
   }
 
+  /**
+   * Persiste la cotización una sola vez. Devuelve el id, o null si falló (el
+   * error ya se avisó). Es la misma lógica de snapshot para el botón Guardar y
+   * para el guardado automático al generar la historia.
+   */
+  function construirPayload(): EntradaCotizacion {
+    return {
+      url: url.trim(),
+      nombre: campos.nombre.trim(),
+      imagen_url: campos.imagen_url.trim() || null,
+      captura_url: capturaUrl,
+      imagen_origen: origen,
+      recorte: origen === "captura" ? recorte : null,
+      historia_url: historiaUrl,
+      historia_recorte: historiaUrl ? historiaRecorte : null,
+      categoria: campos.categoria,
+      talla_notas: campos.talla_notas.trim() || null,
+      precio_usd: aNumero(campos.precio_usd),
+      peso_lb: aNumero(campos.peso_lb),
+      // El servidor recalcula el envío con las tarifas vigentes; aquí solo va
+      // la zona elegida.
+      zona_envio: zonaElegida?.nombre ?? null,
+    };
+  }
+
+  async function persistir(): Promise<string | null> {
+    if (idGuardado) return idGuardado;
+
+    const payload = construirPayload();
+    const resultado = await guardarCotizacion(payload);
+
+    if (!resultado.ok) {
+      toast.error(resultado.error);
+      return null;
+    }
+
+    setIdGuardado(resultado.id);
+    setPayloadGuardado(JSON.stringify(payload));
+    // Ya está a salvo en la base: el borrador local sobra.
+    borrarBorrador();
+    setBorradorRecuperado(false);
+    return resultado.id;
+  }
+
   async function generarHistoria() {
     const problema = validar();
     if (problema) {
@@ -437,6 +623,10 @@ export function NuevaCotizacion({ settings, trm }: Props) {
 
     setGenerando(true);
     try {
+      // Se guarda ANTES de generar: si se publica, no se puede perder.
+      const id = await persistir();
+      if (!id) return;
+
       const params = new URLSearchParams({
         nombre: campos.nombre.trim(),
         precio_cop: String(calculo.precio_cop),
@@ -459,6 +649,9 @@ export function NuevaCotizacion({ settings, trm }: Props) {
       const objectUrl = URL.createObjectURL(blob);
       previewRef.current = objectUrl;
       setPreview({ url: objectUrl, blob });
+
+      // Se marca después de generar: si la imagen falla, la métrica no miente.
+      await marcarHistoriaGenerada(id);
     } catch {
       toast.error("No pude generar la historia. Intenta de nuevo.");
     } finally {
@@ -481,29 +674,36 @@ export function NuevaCotizacion({ settings, trm }: Props) {
     }
 
     setGuardando(true);
-    const resultado = await guardarCotizacion({
-      url: url.trim(),
-      nombre: campos.nombre.trim(),
-      imagen_url: campos.imagen_url.trim() || null,
-      captura_url: capturaUrl,
-      imagen_origen: origen,
-      recorte: origen === "captura" ? recorte : null,
-      historia_url: historiaUrl,
-      historia_recorte: historiaUrl ? historiaRecorte : null,
-      categoria: campos.categoria,
-      talla_notas: campos.talla_notas.trim() || null,
-      precio_usd: aNumero(campos.precio_usd),
-      peso_lb: aNumero(campos.peso_lb),
-      // El servidor recalcula el envío con las tarifas vigentes; aquí solo va
-      // la zona elegida.
-      zona_envio: zonaElegida?.nombre ?? null,
-    });
-    setGuardando(false);
 
-    if (!resultado.ok) {
-      toast.error(resultado.error);
+    // Ya existe la fila (se guardó al generar la historia): si el formulario
+    // cambió desde entonces, se actualiza en vez de crear una segunda.
+    if (idGuardado) {
+      const payload = construirPayload();
+
+      if (JSON.stringify(payload) === payloadGuardado) {
+        setGuardando(false);
+        toast.success("Esta cotización ya estaba guardada.");
+        router.push("/historial");
+        return;
+      }
+
+      const resultado = await actualizarCotizacion(idGuardado, payload);
+      setGuardando(false);
+
+      if (!resultado.ok) {
+        toast.error(resultado.error);
+        return;
+      }
+      setPayloadGuardado(JSON.stringify(payload));
+      toast.success("Cotización actualizada.");
+      router.push("/historial");
       return;
     }
+
+    const id = await persistir();
+    setGuardando(false);
+
+    if (!id) return;
     toast.success("Cotización guardada.");
     router.push("/historial");
   }
@@ -533,6 +733,20 @@ export function NuevaCotizacion({ settings, trm }: Props) {
           )}
         </p>
       </header>
+
+      {/* Discreta a propósito: informa de algo que ya pasó, no pide decidir. */}
+      {borradorRecuperado ? (
+        <div className="text-muted-foreground mb-4 flex items-center justify-between gap-3 rounded-md border border-dashed px-3 py-2 text-xs">
+          <span>Borrador recuperado</span>
+          <button
+            type="button"
+            onClick={descartarBorrador}
+            className="touch-manipulation font-medium underline underline-offset-4 active:opacity-60"
+          >
+            Descartar
+          </button>
+        </div>
+      ) : null}
 
       {/* Acción primaria */}
       <SubirCaptura
@@ -796,6 +1010,9 @@ export function NuevaCotizacion({ settings, trm }: Props) {
                   margen_cop: calculo.margen_cop,
                   trm_vigencia: trm?.vigencia,
                   trm_desde_cache: trm?.desdeCache,
+                  comision_pct: settings.comision_pct,
+                  comision_cop: comision.comision_cop,
+                  margen_neto_cop: comision.margen_neto_cop,
                 })}
               />
               <div className="mt-4 border-t pt-4">

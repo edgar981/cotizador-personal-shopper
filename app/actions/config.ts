@@ -16,6 +16,12 @@ const esquema = z.object({
   margen_pct: porcentaje,
   sales_tax_pct: porcentaje,
   trm_buffer_pct: porcentaje,
+  // Tope 100 y no 500 como los demás: es una porción del margen, y más del
+  // 100% dejaría un margen neto negativo, que no significa nada.
+  comision_pct: z
+    .number()
+    .min(0, "No puede ser negativo.")
+    .max(100, "La comisión no puede pasar del 100% del margen."),
   tarifa_lb_usd: z.number().positive("La tarifa por libra debe ser mayor que 0."),
   redondeo_cop: z
     .number()
@@ -97,6 +103,7 @@ export async function guardarConfig(entrada: EntradaConfig): Promise<ResultadoCo
     margen_pct: d.margen_pct / 100,
     sales_tax_pct: d.sales_tax_pct / 100,
     trm_buffer_pct: d.trm_buffer_pct / 100,
+    comision_pct: d.comision_pct / 100,
     tarifa_lb_usd: d.tarifa_lb_usd,
     redondeo_cop: d.redondeo_cop,
     pesos_categoria: pesos,

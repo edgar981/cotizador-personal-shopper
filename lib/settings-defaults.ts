@@ -45,6 +45,7 @@ export const SETTINGS_DEFAULTS = {
   sales_tax_pct: 0.07,
   trm_buffer_pct: 0.02,
   redondeo_cop: 5000,
+  comision_pct: 0.1,
   pesos_categoria: {
     tenis: 2.6,
     ropa: 1.1,
@@ -66,6 +67,8 @@ export type SettingsPlano = {
   sales_tax_pct: number;
   trm_buffer_pct: number;
   redondeo_cop: number;
+  /** Porción del margen que se va en comisión, en fracción (0.1 = 10%). */
+  comision_pct: number;
   pesos_categoria: Record<string, number>;
   zonas_envio: ZonaEnvio[];
   ig_handle: string;

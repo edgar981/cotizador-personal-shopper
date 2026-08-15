@@ -30,6 +30,7 @@ export function ConfigForm({ settings }: { settings: SettingsPlano }) {
 
   const [campos, setCampos] = useState({
     margen_pct: aPorcentaje(settings.margen_pct),
+    comision_pct: aPorcentaje(settings.comision_pct),
     sales_tax_pct: aPorcentaje(settings.sales_tax_pct),
     trm_buffer_pct: aPorcentaje(settings.trm_buffer_pct),
     tarifa_lb_usd: String(settings.tarifa_lb_usd),
@@ -75,6 +76,7 @@ export function ConfigForm({ settings }: { settings: SettingsPlano }) {
 
     const resultado = await guardarConfig({
       margen_pct: aNumero(campos.margen_pct),
+      comision_pct: aNumero(campos.comision_pct),
       sales_tax_pct: aNumero(campos.sales_tax_pct),
       trm_buffer_pct: aNumero(campos.trm_buffer_pct),
       tarifa_lb_usd: aNumero(campos.tarifa_lb_usd),
@@ -159,6 +161,21 @@ export function ConfigForm({ settings }: { settings: SettingsPlano }) {
                 className="h-11"
               />
             </div>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="comision">Comisión (% del margen)</Label>
+            <Input
+              id="comision"
+              value={campos.comision_pct}
+              onChange={(e) => set("comision_pct", e.target.value)}
+              inputMode="decimal"
+              className="h-11"
+            />
+            <p className="text-muted-foreground text-xs">
+              Se descuenta del margen, no del precio. No cambia lo que paga la clienta ni sale
+              en la historia.
+            </p>
           </div>
 
           <div className="grid gap-2">

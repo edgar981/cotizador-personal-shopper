@@ -1,3 +1,4 @@
+import { porcentajeVisible } from "@/lib/comision";
 import { formatearCOP, formatearTRM, formatearUSD } from "@/lib/cotizador";
 import { cn } from "@/lib/utils";
 
@@ -18,7 +19,24 @@ export function filasDesglose(d: {
   margen_cop: number;
   trm_vigencia?: string | null;
   trm_desde_cache?: boolean;
+  /** Reparto del margen. Se omite entero si no hay comisión configurada. */
+  comision_pct?: number | null;
+  comision_cop?: number | null;
+  margen_neto_cop?: number | null;
 }): FilaDesglose[] {
+  // Derivadas del margen, no del precio: son internas y no salen en la
+  // historia. Solo se muestran si hay algo que repartir.
+  const reparto: FilaDesglose[] =
+    d.comision_cop != null && d.margen_neto_cop != null && (d.comision_pct ?? 0) > 0
+      ? [
+          {
+            etiqueta: `Comisión (${porcentajeVisible(d.comision_pct ?? 0)}%)`,
+            valor: formatearCOP(d.comision_cop),
+          },
+          { etiqueta: "Margen neto", valor: formatearCOP(d.margen_neto_cop) },
+        ]
+      : [];
+
   return [
     { etiqueta: "Producto", valor: formatearUSD(d.precio_usd) },
     { etiqueta: "Sales tax", valor: formatearUSD(d.tax_usd) },
@@ -39,6 +57,7 @@ export function filasDesglose(d: {
     },
     { etiqueta: "Costo aterrizado", valor: formatearCOP(d.costo_cop) },
     { etiqueta: "Tu margen", valor: formatearCOP(d.margen_cop) },
+    ...reparto,
   ];
 }
 
