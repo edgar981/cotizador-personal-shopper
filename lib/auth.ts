@@ -27,6 +27,37 @@ function resolverBaseURL(): string | undefined {
   return "http://localhost:3001";
 }
 
+/**
+ * Orígenes extra aceptados, solo en preview.
+ *
+ * Cada deployment de preview vive en una URL distinta y hay dos formas de
+ * llegar: la de la rama (`VERCEL_BRANCH_URL`, que apunta al último commit) y la
+ * inmutable de ese deployment (`VERCEL_URL`). Ambas vienen sin protocolo. Se
+ * filtran las que falten para no terminar con "https://undefined".
+ *
+ * En producción devuelve `undefined` y no se pasa la opción: el único origen
+ * de confianza sigue siendo `BETTER_AUTH_URL`.
+ *
+ * Sin comodín a propósito. Better Auth sí los soporta, pero su `*` no se
+ * detiene en los puntos: `https://*.vercel.app` daría por confiable cualquier
+ * deployment de Vercel, de cualquier cuenta. Ni siquiera acotarlo al nombre del
+ * proyecto alcanza, porque cualquiera puede llamar así a un proyecto suyo. El
+ * único patrón seguro tendría que anclar también el slug de la cuenta, y para
+ * lo que cubren estas dos variables no hace falta.
+ */
+function resolverTrustedOrigins(): string[] | undefined {
+  if (process.env.VERCEL_ENV !== "preview") return undefined;
+
+  const hosts = [process.env.VERCEL_BRANCH_URL, process.env.VERCEL_URL].filter(
+    (host): host is string => Boolean(host),
+  );
+
+  // `Set` por si las dos variables apuntaran al mismo host.
+  return [...new Set(hosts.map((host) => `https://${host}`))];
+}
+
+const trustedOrigins = resolverTrustedOrigins();
+
 function createAuth({ allowSignUp }: { allowSignUp: boolean }) {
   return betterAuth({
     database: prismaAdapter(prisma, { provider: "postgresql" }),
@@ -37,6 +68,8 @@ function createAuth({ allowSignUp }: { allowSignUp: boolean }) {
     },
     secret: process.env.BETTER_AUTH_SECRET,
     baseURL: resolverBaseURL(),
+    // Se omite la clave entera fuera de preview para no alterar producción.
+    ...(trustedOrigins ? { trustedOrigins } : {}),
     plugins: [nextCookies()],
   });
 }
