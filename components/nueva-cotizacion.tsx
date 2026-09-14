@@ -1026,7 +1026,7 @@ export function NuevaCotizacion({ settings, trm }: Props) {
 
               {/* Referencia aparte, deliberadamente menor que el precio: no se
                   publica ni entra en el cálculo, solo sirve para responderle a
-                  una clienta cuánto le sale hasta su ciudad. */}
+                  un cliente cuánto le sale hasta su ciudad. */}
               {settings.zonas_envio.length ? (
                 <div className="mt-4 border-t pt-4">
                   <Label

@@ -173,7 +173,7 @@ export function ConfigForm({ settings }: { settings: SettingsPlano }) {
               className="h-11"
             />
             <p className="text-muted-foreground text-xs">
-              Se descuenta del margen, no del precio. No cambia lo que paga la clienta ni sale
+              Se descuenta del margen, no del precio. No cambia lo que paga el cliente ni sale
               en la historia.
             </p>
           </div>

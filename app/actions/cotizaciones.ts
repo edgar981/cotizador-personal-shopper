@@ -33,7 +33,7 @@ const esquema = z.object({
   precio_usd: z.number().positive("El precio en USD debe ser mayor que 0."),
   peso_lb: z.number().positive("El peso debe ser mayor que 0."),
   /// Nombre de la zona del tramo nacional. Opcional: la usuaria solo la elige
-  /// cuando una clienta pregunta por su ciudad.
+  /// cuando un cliente pregunta por su ciudad.
   zona_envio: z.string().trim().max(40).optional().nullable(),
 });
 

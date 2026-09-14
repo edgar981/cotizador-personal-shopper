@@ -1,7 +1,7 @@
 /**
  * Borrador de la cotización en curso, en localStorage.
  *
- * La usuaria arma una cotización con la clienta al teléfono: si sale de la
+ * La usuaria arma una cotización con el cliente al teléfono: si sale de la
  * pantalla a medias, perdía la captura ya subida y todo lo escrito. Se guarda
  * uno solo a la vez y caduca a las 24 horas, porque un borrador viejo confunde
  * más de lo que ayuda.

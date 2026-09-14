@@ -30,7 +30,7 @@ const EPSILON = 1e-9;
  * `redondeo_cop` (5.000) es del precio publicado: ahí redondear hacia arriba se
  * ve mejor y protege el margen. Sobre un envío ese mismo paso distorsiona
  * demasiado — 17.200 se convertía en 20.000, casi 3.000 de más sobre un número
- * que la usuaria le dice a una clienta como referencia. Con 500 el estimado
+ * que la usuaria le dice a un cliente como referencia. Con 500 el estimado
  * queda fino y sigue siendo un número redondo de decir por chat.
  *
  * Constante local y no campo de `Settings`: no hay evidencia de que necesite

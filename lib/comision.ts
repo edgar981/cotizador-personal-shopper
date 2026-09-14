@@ -3,7 +3,7 @@
  * cuánto queda limpio.
  *
  * Se calcula sobre `margen_cop`, NO sobre `precio_cop`: es una porción de lo
- * que la cotización gana, no del precio que paga la clienta. Por eso el precio
+ * que la cotización gana, no del precio que paga el cliente. Por eso el precio
  * publicado no cambia y la comisión nunca sale en la historia — es información
  * interna del negocio.
  *
