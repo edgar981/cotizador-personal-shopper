@@ -70,6 +70,7 @@ export default async function EncargoPage({
 
   const inicial: ValoresEncargo = {
     cliente_nombre: encargo.cliente_nombre,
+    cliente_doc: encargo.cliente_doc ?? "",
     cliente_tel: encargo.cliente_tel ?? "",
     cliente_notas: encargo.cliente_notas ?? "",
     talla: encargo.talla ?? "",
@@ -151,6 +152,10 @@ export default async function EncargoPage({
             </Badge>
           </div>
 
+          {encargo.cliente_doc ? (
+            <p className="text-muted-foreground text-sm">CC {encargo.cliente_doc}</p>
+          ) : null}
+
           {encargo.cliente_tel ? (
             <a
               href={`tel:${encargo.cliente_tel.replace(/\s+/g, "")}`}
@@ -195,7 +200,7 @@ export default async function EncargoPage({
           {/* Los valores son un snapshot del momento de confirmar: si la
               cotización se regenera con otra TRM, el encargo no se mueve. */}
           <p className="text-muted-foreground mt-4 text-xs">
-            Precio y envío son los que se le prometieron a la clienta; no cambian si la
+            Precio y envío son los que se le prometieron al cliente; no cambian si la
             cotización se actualiza.
           </p>
         </CardContent>

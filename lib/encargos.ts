@@ -2,7 +2,7 @@
  * Dominio de los encargos: estados, destinos y los filtros de su lista.
  *
  * Una cotización es un producto publicado; un encargo es una persona pidiendo
- * ese producto, en una talla, para un destino. Varias clientas pueden pedir el
+ * ese producto, en una talla, para un destino. Varios clientes pueden pedir el
  * mismo producto: son varios encargos sobre la misma cotización, que nunca se
  * duplica.
  *

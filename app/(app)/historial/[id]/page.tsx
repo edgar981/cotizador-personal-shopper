@@ -39,7 +39,7 @@ export default async function DetallePage({
     prisma.cotizacion.findUnique({
       where: { id },
       // Los encargos de esta cotización: una misma publicación puede tener
-      // varias clientas, cada una con su talla y su destino.
+      // varios clientes, cada uno con su talla y su destino.
       include: { encargos: { orderBy: { createdAt: "asc" } } },
     }),
     obtenerSettings(),
@@ -67,6 +67,7 @@ export default async function DetallePage({
   const envios = enviosSugeridos(settings.zonas_envio, c.peso_lb);
   const inicial: ValoresEncargo = {
     cliente_nombre: "",
+    cliente_doc: "",
     cliente_tel: "",
     cliente_notas: "",
     talla: "",

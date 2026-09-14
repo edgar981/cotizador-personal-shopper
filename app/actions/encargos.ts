@@ -30,7 +30,8 @@ const estados = ESTADOS.map((e) => e.valor) as [Estado, ...Estado[]];
 
 const esquema = z
   .object({
-    cliente_nombre: z.string().trim().min(1, "Ponle el nombre de la clienta.").max(120),
+    cliente_nombre: z.string().trim().min(1, "Ponle el nombre del cliente.").max(120),
+    cliente_doc: texto(30),
     cliente_tel: texto(40),
     cliente_notas: texto(500),
 
@@ -74,6 +75,7 @@ function aFila(d: EntradaEncargo) {
 
   return {
     cliente_nombre: d.cliente_nombre,
+    cliente_doc: limpio(d.cliente_doc),
     cliente_tel: limpio(d.cliente_tel),
     cliente_notas: limpio(d.cliente_notas),
     talla: limpio(d.talla),
@@ -101,7 +103,7 @@ function revalidar(id: string, cotizacionId: string) {
  *
  * `precio_cop` y `envio_cop` llegan del formulario ya pre-llenados con los de la
  * cotización, pero se guardan como snapshot propio: si la cotización se
- * regenera con otra TRM, el encargo conserva lo que se le prometió a la clienta.
+ * regenera con otra TRM, el encargo conserva lo que se le prometió al cliente.
  */
 export async function crearEncargo(
   cotizacionId: string,

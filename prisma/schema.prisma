@@ -101,14 +101,14 @@ model Cotizacion {
   createdAt DateTime @default(now())
 
   /// Personas que pidieron este producto. Una cotización es un producto
-  /// publicado; cada encargo es una clienta pidiéndolo en su talla y para su
+  /// publicado; cada encargo es un cliente pidiéndolo en su talla y para su
   /// destino. Por eso la cotización nunca se duplica.
   encargos Encargo[]
 
   @@index([createdAt])
 }
 
-/// Una clienta pidiendo un producto ya cotizado, con su talla y su destino.
+/// Un cliente pidiendo un producto ya cotizado, con su talla y su destino.
 ///
 /// El dato existe desde el día que se confirma la compra; antes se reconstruía
 /// por WhatsApp semanas después, cuando los paquetes ya estaban en Bogotá.
@@ -117,11 +117,15 @@ model Encargo {
   cotizacionId String
   cotizacion   Cotizacion @relation(fields: [cotizacionId], references: [id])
 
-  /// Datos de la clienta embebidos, sin tabla `Cliente` aparte: todavía no hay
+  /// Datos del cliente embebidos, sin tabla `Cliente` aparte: todavía no hay
   /// evidencia de que se necesite historial por persona, y una tabla prematura
   /// obliga a resolver deduplicación de nombres que nadie pidió. Si aparece la
   /// necesidad, se extrae.
   cliente_nombre String
+  /// Cédula, que a veces pide la transportadora. Se guarda tal como se
+  /// escriba: lo que sale del mensaje del cliente ya viene solo con dígitos,
+  /// pero a mano puede entrar un documento que no sea una cédula.
+  cliente_doc    String?
   cliente_tel    String?
   cliente_notas  String?
 
@@ -141,7 +145,7 @@ model Encargo {
 
   /// Snapshot del momento de confirmar, igual que todo lo demás en esta app: si
   /// la cotización se regenera con otra TRM, el encargo conserva lo que se le
-  /// prometió a la clienta.
+  /// prometió al cliente.
   precio_cop Int
   envio_cop  Int?
   abono_cop  Int?

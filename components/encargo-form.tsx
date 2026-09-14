@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Pencil, Plus } from "lucide-react";
+import { Loader2, Pencil, Plus, ScanText } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 /** Todo se edita como texto y se convierte al enviar, igual que en /config. */
 export type ValoresEncargo = {
   cliente_nombre: string;
+  cliente_doc: string;
   cliente_tel: string;
   cliente_notas: string;
   talla: string;
@@ -36,6 +37,18 @@ export type ValoresEncargo = {
 };
 
 export type EnviosPorDestino = Record<DestinoTipo, number | null>;
+
+/** Lo que devuelve POST /api/leer-cliente. */
+type Lectura = {
+  cliente_nombre: string | null;
+  cliente_doc: string | null;
+  cliente_tel: string | null;
+  destino_ciudad: string | null;
+  destino_dir: string | null;
+  cliente_notas: string | null;
+  destino_sugerido: DestinoTipo | null;
+  encontroAlgo: boolean;
+};
 
 /** Entero de COP; vacío es null (el campo es opcional), no cero. */
 function aEntero(valor: string): number | null {
@@ -62,6 +75,11 @@ export function EncargoForm({ inicial, envios, ...props }: Props) {
   const [guardando, setGuardando] = useState(false);
   const [campos, setCampos] = useState<ValoresEncargo>(inicial);
 
+  // El mensaje pegado del cliente. Se conserva pase lo que pase con la lectura:
+  // si el modelo no entendió, sigue ahí para transcribirlo a mano.
+  const [mensaje, setMensaje] = useState("");
+  const [leyendo, setLeyendo] = useState(false);
+
   // Al editar, el envío guardado es un snapshot y manda sobre cualquier
   // sugerencia: se marca como tocado de entrada. Al crear, en cambio, el campo
   // sigue al destino mientras la usuaria no lo escriba a mano.
@@ -77,6 +95,7 @@ export function EncargoForm({ inicial, envios, ...props }: Props) {
     if (valor) {
       setCampos(inicial);
       setEnvioTocado(editando);
+      setMensaje("");
     }
     setAbierto(valor);
   }
@@ -88,6 +107,54 @@ export function EncargoForm({ inicial, envios, ...props }: Props) {
       // El envío acompaña al destino hasta que alguien lo escriba a mano.
       envio_cop: envioTocado ? previo.envio_cop : (envios[destino]?.toString() ?? ""),
     }));
+  }
+
+  /**
+   * Lee el mensaje pegado y pre-llena los campos. Igual que la extracción por
+   * visión: el resultado es un punto de partida editable y nunca bloquea nada,
+   * así que un fallo se avisa sin ruido y el formulario queda como estaba.
+   */
+  async function leerMensaje() {
+    const texto = mensaje.trim();
+    if (!texto || leyendo) return;
+
+    setLeyendo(true);
+    try {
+      const res = await fetch("/api/leer-cliente", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texto }),
+      });
+      if (!res.ok) throw new Error("fallo");
+
+      const datos = (await res.json()) as Lectura;
+      if (!datos.encontroAlgo) {
+        toast("No reconocí datos en ese mensaje. Llénalos a mano.");
+        return;
+      }
+
+      setCampos((previo) => {
+        // Solo pisa lo que vino con dato: si el mensaje no traía teléfono, lo
+        // que ya estuviera escrito se respeta.
+        const destino = datos.destino_sugerido ?? previo.destino_tipo;
+        return {
+          ...previo,
+          cliente_nombre: datos.cliente_nombre ?? previo.cliente_nombre,
+          cliente_doc: datos.cliente_doc ?? previo.cliente_doc,
+          cliente_tel: datos.cliente_tel ?? previo.cliente_tel,
+          cliente_notas: datos.cliente_notas ?? previo.cliente_notas,
+          destino_ciudad: datos.destino_ciudad ?? previo.destino_ciudad,
+          destino_dir: datos.destino_dir ?? previo.destino_dir,
+          destino_tipo: destino,
+          envio_cop: envioTocado ? previo.envio_cop : (envios[destino]?.toString() ?? ""),
+        };
+      });
+      toast.success("Datos leídos. Revísalos antes de crear.");
+    } catch {
+      toast.error("No pude leer el mensaje. Llena los campos a mano.");
+    } finally {
+      setLeyendo(false);
+    }
   }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -109,6 +176,7 @@ export function EncargoForm({ inicial, envios, ...props }: Props) {
 
     const entrada: EntradaEncargo = {
       cliente_nombre: campos.cliente_nombre,
+      cliente_doc: campos.cliente_doc,
       cliente_tel: campos.cliente_tel,
       cliente_notas: campos.cliente_notas,
       talla: campos.talla,
@@ -163,15 +231,60 @@ export function EncargoForm({ inicial, envios, ...props }: Props) {
         <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col gap-4">
           {/* Scroll solo acá dentro: el pie con Guardar queda siempre a la vista. */}
           <div className="-mx-1 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-1">
-            <Campo etiqueta="Clienta" id="cliente_nombre">
+            {/* Solo al crear: al editar los datos ya están puestos y volver a
+                pegar el mensaje solo puede pisar una corrección hecha a mano. */}
+            {!editando ? (
+              <div className="flex flex-col gap-2 rounded-lg border border-dashed p-3">
+                <Label
+                  htmlFor="mensaje_cliente"
+                  className="text-muted-foreground text-xs tracking-wide uppercase"
+                >
+                  Pega el mensaje del cliente
+                </Label>
+                <Textarea
+                  id="mensaje_cliente"
+                  value={mensaje}
+                  onChange={(e) => setMensaje(e.target.value)}
+                  placeholder="Nombre, cédula, celular y dirección, tal como los mandó"
+                  rows={3}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 touch-manipulation"
+                  onClick={leerMensaje}
+                  disabled={leyendo || !mensaje.trim()}
+                >
+                  {leyendo ? (
+                    <Loader2 className="size-4 animate-spin" aria-hidden />
+                  ) : (
+                    <ScanText className="size-4" aria-hidden />
+                  )}
+                  Leer datos
+                </Button>
+              </div>
+            ) : null}
+
+            <Campo etiqueta="Cliente" id="cliente_nombre">
               <Input
                 id="cliente_nombre"
                 value={campos.cliente_nombre}
                 onChange={(e) => set("cliente_nombre", e.target.value)}
-                placeholder="Nombre de la clienta"
+                placeholder="Nombre del cliente"
                 autoCapitalize="words"
                 className="h-11"
                 required
+              />
+            </Campo>
+
+            <Campo etiqueta="Documento" id="cliente_doc" opcional>
+              <Input
+                id="cliente_doc"
+                value={campos.cliente_doc}
+                onChange={(e) => set("cliente_doc", e.target.value)}
+                inputMode="numeric"
+                placeholder="Cédula, si la transportadora la pide"
+                className="h-11 tabular-nums"
               />
             </Campo>
 
@@ -303,20 +416,23 @@ export function EncargoForm({ inicial, envios, ...props }: Props) {
               />
             </Campo>
 
-            {/* Solo al editar: el formulario de crear se queda con lo que se pide
-                por chat al confirmar, y estos dos aparecen después. La pantalla
-                de detalle sí deja editar todo. */}
-            {editando ? (
-              <Campo etiqueta="Notas de la clienta" id="cliente_notas" opcional>
+            {/* Al crear aparece solo si la lectura del mensaje lo llenó: si no,
+                sería un segundo campo de notas sin razón de estar ahí. Lo que se
+                muestra siempre se puede editar. */}
+            {editando || campos.cliente_notas ? (
+              <Campo etiqueta="Notas del cliente" id="cliente_notas" opcional>
                 <Textarea
                   id="cliente_notas"
                   value={campos.cliente_notas}
                   onChange={(e) => set("cliente_notas", e.target.value)}
-                  placeholder="Lo que haya que recordar de ella"
+                  placeholder="Lo que haya que recordar de él"
                   rows={2}
                 />
               </Campo>
             ) : null}
+
+            {/* La guía solo al editar: aparece cuando el paquete ya se despachó,
+                nunca al confirmar el encargo. */}
 
             {editando ? (
               <Campo etiqueta="Guía" id="guia" opcional>
