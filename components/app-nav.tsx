@@ -1,15 +1,20 @@
 "use client";
 
-import { Clock, LogOut, Settings, Sparkles } from "lucide-react";
+import { Clock, LogOut, Package, Settings, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { signOut } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
+// Cinco celdas (cuatro tabs + Salir). Medido con Geist a 11px: en la pantalla
+// más angosta de uso real (320 px) cada celda queda en 64 px y la etiqueta más
+// larga, "Encargos", ocupa 48 px — no se corta ninguna y el área táctil sigue
+// por encima del mínimo de 44 pt.
 const TABS = [
   { href: "/", etiqueta: "Nueva", Icono: Sparkles },
   { href: "/historial", etiqueta: "Historial", Icono: Clock },
+  { href: "/encargos", etiqueta: "Encargos", Icono: Package },
   { href: "/config", etiqueta: "Config", Icono: Settings },
 ];
 

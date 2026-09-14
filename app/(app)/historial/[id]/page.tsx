@@ -1,13 +1,22 @@
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ArrowLeft, ChevronRight, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Desglose, filasDesglose } from "@/components/desglose";
 import { BotonHistoria } from "@/components/boton-historia";
+import { EncargoForm, type ValoresEncargo } from "@/components/encargo-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatearCOP } from "@/lib/cotizador";
+import {
+  DESTINO_POR_DEFECTO,
+  enviosSugeridos,
+  esTerminal,
+  etiquetaDestino,
+  etiquetaEstado,
+} from "@/lib/encargos";
 import { construirHref, leerFiltros, type ParamsHistorial } from "@/lib/historial-filtros";
 import { prisma } from "@/lib/prisma";
+import { obtenerSettings } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Detalle · Cotizador" };
@@ -26,7 +35,15 @@ export default async function DetallePage({
   searchParams: Promise<ParamsHistorial>;
 }) {
   const { id } = await params;
-  const c = await prisma.cotizacion.findUnique({ where: { id } });
+  const [c, settings] = await Promise.all([
+    prisma.cotizacion.findUnique({
+      where: { id },
+      // Los encargos de esta cotización: una misma publicación puede tener
+      // varias clientas, cada una con su talla y su destino.
+      include: { encargos: { orderBy: { createdAt: "asc" } } },
+    }),
+    obtenerSettings(),
+  ]);
   if (!c) notFound();
 
   // Los filtros llegan colgados del enlace que trajo hasta acá: volver devuelve
@@ -43,6 +60,27 @@ export default async function DetallePage({
   const comisionSnapshot = (snapshot.comision ?? {}) as Record<string, unknown>;
   const comisionPct =
     typeof comisionSnapshot.pct === "number" ? comisionSnapshot.pct : null;
+
+  // El envío se pre-llena con la zona que corresponde al destino; el precio,
+  // con el publicado. Los dos quedan editables y se guardan como snapshot del
+  // encargo: si la cotización se regenera con otra TRM, no lo arrastra.
+  const envios = enviosSugeridos(settings.zonas_envio, c.peso_lb);
+  const inicial: ValoresEncargo = {
+    cliente_nombre: "",
+    cliente_tel: "",
+    cliente_notas: "",
+    talla: "",
+    color: "",
+    cantidad: "1",
+    destino_tipo: DESTINO_POR_DEFECTO,
+    destino_ciudad: "",
+    destino_dir: "",
+    precio_cop: String(c.precio_cop),
+    envio_cop: envios[DESTINO_POR_DEFECTO]?.toString() ?? "",
+    abono_cop: "",
+    guia: "",
+    notas: "",
+  };
 
   return (
     <div className="mx-auto w-full max-w-lg px-5 pt-8">
@@ -145,6 +183,63 @@ export default async function DetallePage({
               </p>
             </div>
           ) : null}
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardContent className="flex flex-col gap-4 pt-6">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-muted-foreground text-xs tracking-wide uppercase">Encargos</p>
+            {c.encargos.length ? (
+              <span className="text-muted-foreground text-xs">
+                {c.encargos.length === 1 ? "1 encargo" : `${c.encargos.length} encargos`}
+              </span>
+            ) : null}
+          </div>
+
+          {c.encargos.length ? (
+            <ul className="divide-border -my-1 divide-y">
+              {c.encargos.map((encargo) => (
+                <li key={encargo.id}>
+                  <Link
+                    href={`/encargos/${encargo.id}`}
+                    className="flex touch-manipulation items-center gap-3 py-3 active:opacity-60"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">
+                        {encargo.cliente_nombre}
+                      </span>
+                      <span className="text-muted-foreground mt-1 block truncate text-xs">
+                        {[
+                          encargo.talla ? `Talla ${encargo.talla}` : null,
+                          encargo.cantidad > 1 ? `×${encargo.cantidad}` : null,
+                          etiquetaDestino(encargo.destino_tipo, encargo.destino_ciudad),
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    </span>
+                    <Badge
+                      variant={esTerminal(encargo.estado) ? "outline" : "secondary"}
+                      className="shrink-0 font-normal"
+                    >
+                      {etiquetaEstado(encargo.estado)}
+                    </Badge>
+                    <ChevronRight
+                      className="text-muted-foreground size-4 shrink-0"
+                      aria-hidden
+                    />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              Nadie ha pedido este producto todavía.
+            </p>
+          )}
+
+          <EncargoForm modo="crear" cotizacionId={c.id} inicial={inicial} envios={envios} />
         </CardContent>
       </Card>
 

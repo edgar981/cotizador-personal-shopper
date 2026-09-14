@@ -85,8 +85,8 @@ model Cotizacion {
   /// de `precio_cop`, y nunca aparecen en la historia: son internas.
   /// `Float` como `margen_cop` (y no `Int` como el envío) para que
   /// `comision_cop + margen_neto_cop` sume exactamente `margen_cop`.
-  comision_cop       Float?
-  margen_neto_cop    Float?
+  comision_cop    Float?
+  margen_neto_cop Float?
 
   // Snapshot del cálculo al momento de cotizar (nunca recalcular histórico)
   tax_usd      Float
@@ -100,7 +100,80 @@ model Cotizacion {
 
   createdAt DateTime @default(now())
 
+  /// Personas que pidieron este producto. Una cotización es un producto
+  /// publicado; cada encargo es una clienta pidiéndolo en su talla y para su
+  /// destino. Por eso la cotización nunca se duplica.
+  encargos Encargo[]
+
   @@index([createdAt])
+}
+
+/// Una clienta pidiendo un producto ya cotizado, con su talla y su destino.
+///
+/// El dato existe desde el día que se confirma la compra; antes se reconstruía
+/// por WhatsApp semanas después, cuando los paquetes ya estaban en Bogotá.
+model Encargo {
+  id           String     @id @default(cuid())
+  cotizacionId String
+  cotizacion   Cotizacion @relation(fields: [cotizacionId], references: [id])
+
+  /// Datos de la clienta embebidos, sin tabla `Cliente` aparte: todavía no hay
+  /// evidencia de que se necesite historial por persona, y una tabla prematura
+  /// obliga a resolver deduplicación de nombres que nadie pidió. Si aparece la
+  /// necesidad, se extrae.
+  cliente_nombre String
+  cliente_tel    String?
+  cliente_notas  String?
+
+  // Qué pidió
+  talla    String?
+  color    String?
+  /// `precio_cop` es por unidad; el total se deriva multiplicando por esto.
+  cantidad Int     @default(1)
+
+  /// "bogota" | "san_marcos" | "otra_ciudad". A San Marcos no se despacha uno
+  /// por uno: se espera el lote completo. Por eso el destino es un tipo y no
+  /// solo una dirección de texto.
+  destino_tipo   String
+  /// Requerida cuando `destino_tipo` = "otra_ciudad".
+  destino_ciudad String?
+  destino_dir    String?
+
+  /// Snapshot del momento de confirmar, igual que todo lo demás en esta app: si
+  /// la cotización se regenera con otra TRM, el encargo conserva lo que se le
+  /// prometió a la clienta.
+  precio_cop Int
+  envio_cop  Int?
+  abono_cop  Int?
+
+  /// confirmado → comprado → en_casillero → en_bogota → despachado → entregado,
+  /// más "cancelado" como estado terminal alterno. Se avanza y se retrocede a
+  /// mano: en la operación real las cosas se devuelven y se corrigen, así que
+  /// NO hay máquina de estados rígida. Cancelar es un estado, nunca un delete.
+  estado String @default("confirmado")
+
+  /// Número de guía de la transportadora, si aplica.
+  guia  String?
+  notas String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Marca de tiempo por estado, para saber cuánto lleva cada cosa. Se reescribe
+  /// cada vez que el encargo entra al estado (corregir un cambio equivocado deja
+  /// la fecha buena); retroceder no borra las marcas ya escritas.
+  /// `confirmado` no tiene columna: `createdAt` ya lo dice.
+  comprado_at     DateTime?
+  en_casillero_at DateTime?
+  en_bogota_at    DateTime?
+  despachado_at   DateTime?
+  entregado_at    DateTime?
+  cancelado_at    DateTime?
+
+  /// Pensados para el tablero de despacho (agrupar por destino y estado).
+  @@index([estado])
+  @@index([destino_tipo, estado])
+  @@index([cotizacionId])
 }
 
 /// Caché diario de la TRM oficial (datos.gov.co). La fila más reciente sirve
