@@ -1,5 +1,6 @@
 "use client";
 
+import { Loader2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
@@ -14,8 +15,16 @@ export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [pendiente, startTransition] = useTransition();
 
+  // Propio, y no el `pendiente` del useTransition: esa bandera solo se prende
+  // cuando arranca la navegación, o sea DESPUÉS de que responde el servidor.
+  // Durante toda la petición —que es la parte lenta— el botón se quedaba
+  // diciendo "Entrar" como si no hubiera registrado el toque.
+  const [enviando, setEnviando] = useState(false);
+
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // Primero que nada, en el mismo tick del toque.
+    setEnviando(true);
     setError(null);
 
     const datos = new FormData(event.currentTarget);
@@ -25,6 +34,7 @@ export function LoginForm() {
     const { error: fallo } = await signIn.email({ email, password });
 
     if (fallo) {
+      setEnviando(false);
       setError("Correo o contraseña incorrectos.");
       return;
     }
@@ -69,8 +79,17 @@ export function LoginForm() {
             </p>
           ) : null}
 
-          <Button type="submit" disabled={pendiente} className="mt-2 h-11">
-            {pendiente ? "Entrando…" : "Entrar"}
+          {/* Sigue ocupado hasta que la navegación termina: entre la respuesta
+              del servidor y el cambio de pantalla no debe parecer que se soltó. */}
+          <Button type="submit" disabled={enviando || pendiente} className="mt-2 h-11">
+            {enviando || pendiente ? (
+              <>
+                <Loader2 className="size-4 animate-spin" aria-hidden />
+                Entrando…
+              </>
+            ) : (
+              "Entrar"
+            )}
           </Button>
         </form>
       </CardContent>

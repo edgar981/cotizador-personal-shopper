@@ -121,7 +121,7 @@ export default async function EncargoPage({
     <div className="mx-auto w-full max-w-lg px-5 pt-8">
       <Link
         href={hrefVolver}
-        className="text-muted-foreground mb-4 inline-flex items-center gap-1.5 text-sm"
+        className="text-muted-foreground mb-4 inline-flex touch-manipulation items-center gap-1.5 text-sm active:opacity-60"
       >
         <ArrowLeft className="size-4" aria-hidden />
         Encargos
@@ -159,7 +159,7 @@ export default async function EncargoPage({
           {encargo.cliente_tel ? (
             <a
               href={`tel:${encargo.cliente_tel.replace(/\s+/g, "")}`}
-              className="text-muted-foreground text-sm underline underline-offset-4"
+              className="text-muted-foreground touch-manipulation text-sm underline underline-offset-4 active:opacity-60"
             >
               {encargo.cliente_tel}
             </a>
@@ -171,7 +171,7 @@ export default async function EncargoPage({
 
           <Link
             href={`/historial/${encargo.cotizacion.id}`}
-            className="text-muted-foreground inline-flex items-center gap-1.5 text-xs underline underline-offset-4"
+            className="text-muted-foreground inline-flex touch-manipulation items-center gap-1.5 text-xs underline underline-offset-4 active:opacity-60"
           >
             <ExternalLink className="size-3.5" aria-hidden />
             Ver la cotización

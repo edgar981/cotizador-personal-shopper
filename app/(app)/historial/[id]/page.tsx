@@ -87,7 +87,7 @@ export default async function DetallePage({
     <div className="mx-auto w-full max-w-lg px-5 pt-8">
       <Link
         href={hrefVolver}
-        className="text-muted-foreground mb-4 inline-flex items-center gap-1.5 text-sm"
+        className="text-muted-foreground mb-4 inline-flex touch-manipulation items-center gap-1.5 text-sm active:opacity-60"
       >
         <ArrowLeft className="size-4" aria-hidden />
         Historial
@@ -122,7 +122,7 @@ export default async function DetallePage({
               href={c.url}
               target="_blank"
               rel="noreferrer noopener"
-              className="text-muted-foreground inline-flex items-center gap-1.5 text-xs underline underline-offset-4"
+              className="text-muted-foreground inline-flex touch-manipulation items-center gap-1.5 text-xs underline underline-offset-4 active:opacity-60"
             >
               <ExternalLink className="size-3.5" aria-hidden />
               Ver en la tienda

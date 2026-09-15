@@ -89,7 +89,7 @@ export function SubirCaptura({
         onClick={() => inputRef.current?.click()}
         disabled={ocupado}
         className={cn(
-          "flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed text-center transition-colors",
+          "flex w-full touch-manipulation flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed text-center transition-colors",
           compacto ? "px-4 py-6" : "px-5 py-10",
           arrastrando ? "border-primary bg-primary/5" : "border-muted-foreground/25",
           ocupado ? "opacity-70" : "active:bg-muted/50",
