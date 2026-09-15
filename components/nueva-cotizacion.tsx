@@ -675,37 +675,40 @@ export function NuevaCotizacion({ settings, trm }: Props) {
 
     setGuardando(true);
 
-    // Ya existe la fila (se guardó al generar la historia): si el formulario
-    // cambió desde entonces, se actualiza en vez de crear una segunda.
-    if (idGuardado) {
-      const payload = construirPayload();
+    try {
+      // Ya existe la fila (se guardó al generar la historia): si el formulario
+      // cambió desde entonces, se actualiza en vez de crear una segunda.
+      if (idGuardado) {
+        const payload = construirPayload();
 
-      if (JSON.stringify(payload) === payloadGuardado) {
-        setGuardando(false);
-        toast.success("Esta cotización ya estaba guardada.");
+        if (JSON.stringify(payload) === payloadGuardado) {
+          toast.success("Esta cotización ya estaba guardada.");
+          router.push("/historial");
+          return;
+        }
+
+        const resultado = await actualizarCotizacion(idGuardado, payload);
+        if (!resultado.ok) {
+          toast.error(resultado.error);
+          return;
+        }
+        setPayloadGuardado(JSON.stringify(payload));
+        toast.success("Cotización actualizada.");
         router.push("/historial");
         return;
       }
 
-      const resultado = await actualizarCotizacion(idGuardado, payload);
-      setGuardando(false);
-
-      if (!resultado.ok) {
-        toast.error(resultado.error);
-        return;
-      }
-      setPayloadGuardado(JSON.stringify(payload));
-      toast.success("Cotización actualizada.");
+      const id = await persistir();
+      if (!id) return;
+      toast.success("Cotización guardada.");
       router.push("/historial");
-      return;
+    } catch {
+      // Si se cae la red, la acción ni responde: sin esto el botón se queda
+      // girando para siempre y parece que la app se colgó.
+      toast.error("No pude guardar la cotización. Intenta de nuevo.");
+    } finally {
+      setGuardando(false);
     }
-
-    const id = await persistir();
-    setGuardando(false);
-
-    if (!id) return;
-    toast.success("Cotización guardada.");
-    router.push("/historial");
   }
 
   // Lo que se publica: la foto puesta a mano manda sobre la captura.

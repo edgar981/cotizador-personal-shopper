@@ -193,19 +193,25 @@ export function EncargoForm({ inicial, envios, ...props }: Props) {
     };
 
     setGuardando(true);
-    const resultado = editando
-      ? await actualizarEncargo(props.encargoId, entrada)
-      : await crearEncargo(props.cotizacionId, entrada);
-    setGuardando(false);
+    try {
+      const resultado = editando
+        ? await actualizarEncargo(props.encargoId, entrada)
+        : await crearEncargo(props.cotizacionId, entrada);
 
-    if (!resultado.ok) {
-      toast.error(resultado.error);
-      return;
+      if (!resultado.ok) {
+        toast.error(resultado.error);
+        return;
+      }
+
+      toast.success(editando ? "Encargo actualizado." : "Encargo creado.");
+      setAbierto(false);
+      router.refresh();
+    } catch {
+      // Si se cae la red, el botón no puede quedarse girando para siempre.
+      toast.error("No pude guardar el encargo. Intenta de nuevo.");
+    } finally {
+      setGuardando(false);
     }
-
-    toast.success(editando ? "Encargo actualizado." : "Encargo creado.");
-    setAbierto(false);
-    router.refresh();
   }
 
   return (

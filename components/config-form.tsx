@@ -74,6 +74,17 @@ export function ConfigForm({ settings }: { settings: SettingsPlano }) {
     event.preventDefault();
     setGuardando(true);
 
+    try {
+      await enviar();
+    } catch {
+      // Si se cae la red, el botón no puede quedarse girando para siempre.
+      toast.error("No pude guardar la configuración. Intenta de nuevo.");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function enviar() {
     const resultado = await guardarConfig({
       margen_pct: aNumero(campos.margen_pct),
       comision_pct: aNumero(campos.comision_pct),
@@ -100,8 +111,6 @@ export function ConfigForm({ settings }: { settings: SettingsPlano }) {
           adicional_lb_cop: aNumero(fila.adicional_lb_cop),
         })),
     });
-
-    setGuardando(false);
 
     if (!resultado.ok) {
       toast.error(resultado.error);
